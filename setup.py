@@ -6,8 +6,7 @@ Stolen from http://python-packaging.readthedocs.io/en/latest/everything.html and
 modified by me.
 
 '''
-import versioneer
-__version__ = versioneer.get_version()
+__version__ = '0.0.1'
 
 from setuptools import setup, find_packages
 
