@@ -1696,7 +1696,9 @@ def send_signup_verification_email(payload,
     # send the email
     email_sent = authnzerver_send_email(
         sender,
-        SIGNUP_VERIFICATION_EMAIL_SUBJECT,
+        SIGNUP_VERIFICATION_EMAIL_SUBJECT.format(
+            server_id=payload['server_id']
+        ),
         msgtext,
         recipients,
         payload['smtp_server'],
@@ -2015,7 +2017,9 @@ def send_forgotpass_verification_email(payload,
     # send the email
     email_sent = authnzerver_send_email(
         sender,
-        FORGOTPASS_VERIFICATION_EMAIL_SUBJECT,
+        FORGOTPASS_VERIFICATION_EMAIL_SUBJECT.format(
+            server_id=payload['server_id']
+        ),
         msgtext,
         recipients,
         payload['smtp_server'],

@@ -70,7 +70,6 @@ modpath = os.path.abspath(os.path.dirname(__file__))
 # define our commandline options
 
 # the port to serve on
-# indexserver  will serve on 12600-12604 by default
 define('port',
        default=12690,
        help='Run on the given port.',
@@ -113,7 +112,7 @@ define('authdb',
 
 # the path to the cache directory used to enforce API limits
 define('cachedir',
-       default='/tmp/authnzerver-cache',
+       default='/tmp/vizinspect-cache',
        help=('Path to the cache directory used by the authnzerver.'),
        type=str)
 
@@ -200,7 +199,7 @@ def autogen_secrets_authdb(basedir, logger):
     # create our authentication database if it doesn't exist
     authdb_path = os.path.join(basedir, '.authdb.sqlite')
 
-    logger.info('No existing authentication DB found, making a new one...')
+    logger.warning('No existing authentication DB found, making a new one...')
 
     # generate the initial DB
     create_sqlite_auth_db(authdb_path, echo=False, returnconn=False)
@@ -242,7 +241,7 @@ def autogen_secrets_authdb(basedir, logger):
         os.chmod(creds, 0o100400)
 
     if p:
-        logger.warning('Generated random admin password, written to: %s' %
+        logger.warning('Generated random admin password, written to: %s\n' %
                        creds)
 
     # finally, we'll generate the server secrets now so we don't have to deal
@@ -255,7 +254,14 @@ def autogen_secrets_authdb(basedir, logger):
         outfd.write(fernet_secret)
     os.chmod(fernet_secret_file, 0o100400)
 
-    return authdb_path, creds, fernet_secret_file
+    session_secret = Fernet.generate_key()
+    session_secret_file = os.path.join(basedir,'.server.secret-session')
+
+    with open(session_secret_file,'wb') as outfd:
+        outfd.write(session_secret)
+    os.chmod(session_secret_file, 0o100400)
+
+    return authdb_path, creds, fernet_secret_file, session_secret_file
 
 
 
@@ -316,7 +322,7 @@ def main():
         if ( (not os.path.exists(AUTHDB_SQLITE)) or
              (not os.path.exists(options.authdb.replace('sqlite:///',''))) ):
 
-            authdb_p, creds, fernet_file = autogen_secrets_authdb(
+            authdb_p, creds, fernet_file, session_file = autogen_secrets_authdb(
                 options.basedir,
                 LOGGER
             )

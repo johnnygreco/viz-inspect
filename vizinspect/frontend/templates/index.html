@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block pagecss %}
+{% end %}
+
+
+{% block pagecontent %}
+
+<!-- this is where all the alerts go -->
+<div class="container-fluid">
+  <div class="row mt-2">
+    <div class="col-12">
+      <div id="alert-box">
+        {% raw flash_messages %}
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="container" >
+  <div class="row" >
+    <div class="col-12" >
+      Hello there!
+    </div>
+  </div>
+</div>
+
+{% end %}
+
+{% block pagejs_modules %}
+{% end %}
+
+
+{% block pagejs %}
+
+$(document).ready(function() {
+
+// UI action setup
+ui.action_setup();
+
+// load the user prefs
+ui.load_cookie_prefs('main-page');
+
+
+});
+
+{% end %}
