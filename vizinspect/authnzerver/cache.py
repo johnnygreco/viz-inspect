@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# cache.py - Waqas Bhatti (wbhatti@astro.princeton.edu) - Aug 2018
+# License: MIT - see the LICENSE file for the full text.
 
-'''cache.py - Waqas Bhatti (wbhatti@astro.princeton.edu) - Aug 2018
-License: MIT - see the LICENSE file for the full text.
-
-This contains functions to drive the cache.
+'''This contains functions to drive the cache.
 
 '''
 
@@ -36,7 +35,7 @@ from diskcache import FanoutCache
 def cache_add(key, value,
               timeout_seconds=0.3,
               expires_seconds=None,
-              cache_dirname='/tmp/lccserver-cache'):
+              cache_dirname='/tmp/authnzerver-cache'):
     '''
     This sets a key to the value specified in the cache.
 
@@ -53,7 +52,7 @@ def cache_add(key, value,
 
 def cache_get(key,
               timeout_seconds=0.3,
-              cache_dirname='/tmp/lccserver-cache'):
+              cache_dirname='/tmp/authnzerver-cache'):
     '''
     This sets a key to the value specified in the cache.
 
@@ -69,7 +68,7 @@ def cache_get(key,
 
 def cache_pop(key,
               timeout_seconds=0.3,
-              cache_dirname='/tmp/lccserver-cache'):
+              cache_dirname='/tmp/authnzerver-cache'):
     '''
     This sets a key to the value specified in the cache.
 
@@ -85,7 +84,7 @@ def cache_pop(key,
 
 def cache_delete(key,
                  timeout_seconds=0.3,
-                 cache_dirname='/tmp/lccserver-cache'):
+                 cache_dirname='/tmp/authnzerver-cache'):
     '''
     This sets a key to the value specified in the cache.
 
@@ -128,7 +127,7 @@ def cache_increment(key,
 
 def cache_decrement(key,
                     timeout_seconds=0.3,
-                    cache_dirname='/tmp/lccserver-cache'):
+                    cache_dirname='/tmp/authnzerver-cache'):
     '''
     This decrements the counter for key.
 
@@ -150,7 +149,7 @@ def cache_decrement(key,
 
 def cache_getrate(key,
                   timeout_seconds=0.3,
-                  cache_dirname='/tmp/lccserver-cache'):
+                  cache_dirname='/tmp/authnzerver-cache'):
     '''This gets the rate of increment for the key by looking at the time of
     insertion inserted at key and the number of times it was incremented in
     key-counter. The rate is then:
@@ -182,7 +181,7 @@ def cache_getrate(key,
 
 
 def cache_flush(timeout_seconds=0.3,
-                cache_dirname='/tmp/lccserver-cache'):
+                cache_dirname='/tmp/authnzerver-cache'):
     '''
     This removes all keys from the cache.
 

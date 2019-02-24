@@ -50,8 +50,8 @@ setup(
     install_requires=INSTALL_REQUIRES,
     entry_points={
         'console_scripts':[
-            'vizserver=vizinspect.frontend.vizserver:main',
-            # 'authnzerver=lccserver.authnzerver.main:main',
+            'viz-mainserver=vizinspect.frontend.vizserver:main',
+            'viz-authnzerver=vizinspect.authnzerver.main:main',
         ],
     },
     include_package_data=True,

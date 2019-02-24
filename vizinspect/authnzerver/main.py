@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# main.py - Waqas Bhatti (wbhatti@astro.princeton.edu) - Aug 2018
+# License: MIT - see the LICENSE file for the full text.
 
-'''main.py - Waqas Bhatti (wbhatti@astro.princeton.edu) - Aug 2018
-License: MIT - see the LICENSE file for the full text.
-
+'''
 This is the main file for the authnzerver, a simple authorization and
 authentication server backed by SQLite and Tornado for use with the lcc-server.
 
@@ -32,7 +32,7 @@ import time
 from functools import partial
 
 # setup signal trapping on SIGINT
-def recv_sigint(signum, stack):
+def _recv_sigint(signum, stack):
     '''
     handler function to receive and process a SIGINT
 
@@ -72,7 +72,7 @@ modpath = os.path.abspath(os.path.dirname(__file__))
 # the port to serve on
 # indexserver  will serve on 12600-12604 by default
 define('port',
-       default=12600,
+       default=12690,
        help='Run on the given port.',
        type=int)
 
@@ -94,12 +94,11 @@ define('backgroundworkers',
        help=('number of background workers to use '),
        type=int)
 
-# basedir is the directory at the root where all LCC collections are stored this
-# contains subdirs for each collection and a lcc-collections.sqlite file that
-# contains info on all collections.
+# basedir is the directory at the root where this server stores its auth DB and
+# looks for secret keys.
 define('basedir',
        default=os.getcwd(),
-       help=('The base directory of the light curve collections.'),
+       help=('The base directory containing secret files and the auth DB.'),
        type=str)
 
 # the path to the authentication DB
@@ -112,17 +111,29 @@ define('authdb',
              '/core/engines.html#database-urls'),
        type=str)
 
-# the path to the cache directory used by indexserver
+# the path to the cache directory used to enforce API limits
 define('cachedir',
-       default='/tmp/lccserver-cache',
-       help=('Path to the cache directory used by the main LCC-Server '
-             'indexserver process as defined in its site-info.json config '
-             'file.'),
+       default='/tmp/authnzerver-cache',
+       help=('Path to the cache directory used by the authnzerver.'),
+       type=str)
+
+
+# the environment variable to get FERNETSECRET from.
+define('secretenv',
+       default='FERNETSECRET',
+       help=('The environment variable used to get the secret key.'),
+       type=str)
+
+# the path to the secret file to get FERNETSECRET from.
+define('secretfile',
+       default='.server.secret-fernet',
+       help=('Path to the file containing the secret key. '
+             'This is relative to the path given in the basedir option.'),
        type=str)
 
 define('sessionexpiry',
-       default=7,
-       help=('This tells the lcc-server the session-expiry time in days.'),
+       default=30,
+       help=('This sets the session-expiry time in days.'),
        type=int)
 
 
@@ -170,10 +181,88 @@ def close_authentication_database():
           file=sys.stdout)
 
 
+###########################################
+## AUTO-GENERATION OF SECRETS AND AUTHDB ##
+###########################################
+
+def autogen_secrets_authdb(basedir, logger):
+    '''
+    This automatically generates a secrets file and auth DB.
+
+    Run only once on the first start of an authnzerver.
+
+    '''
+
+    import getpass
+    from .authdb import create_sqlite_auth_db, initial_authdb_inserts
+    from cryptography.fernet import Fernet
+
+    # create our authentication database if it doesn't exist
+    authdb_path = os.path.join(basedir, '.authdb.sqlite')
+
+    logger.info('No existing authentication DB found, making a new one...')
+
+    # generate the initial DB
+    create_sqlite_auth_db(authdb_path, echo=False, returnconn=False)
+
+    # ask the user for their email address and password the default
+    # email address will be used for the superuser if the email address
+    # is None, we'll use the user's UNIX ID@localhost if the password is
+    # None, a random one will be generated
+
+    try:
+        userid = '%s@localhost' % getpass.getuser()
+    except Exception as e:
+        userid = 'serveradmin@localhost'
+
+    inp_userid = input(
+        '\nAdmin email address [default: %s]: ' %
+        userid
+    )
+    if inp_userid and len(inp_userid.strip()) > 0:
+        userid = inp_userid
+
+    inp_pass = getpass.getpass(
+        'Admin password [default: randomly generated]: '
+    )
+    if inp_pass and len(inp_pass.strip()) > 0:
+        password = inp_pass
+    else:
+        password = None
+
+    # generate the admin users and initial DB info
+    u, p = initial_authdb_inserts('sqlite:///%s' % authdb_path,
+                                  superuser_email=userid,
+                                  superuser_pass=password)
+
+    creds = os.path.join(basedir,
+                         '.server.admin-credentials')
+    with open(creds,'w') as outfd:
+        outfd.write('%s %s\n' % (u,p))
+        os.chmod(creds, 0o100400)
+
+    if p:
+        logger.warning('Generated random admin password, written to: %s' %
+                       creds)
+
+    # finally, we'll generate the server secrets now so we don't have to deal
+    # with them later
+    logger.info('Generating server secret tokens...')
+    fernet_secret = Fernet.generate_key()
+    fernet_secret_file = os.path.join(basedir,'.server.secret-fernet')
+
+    with open(fernet_secret_file,'wb') as outfd:
+        outfd.write(fernet_secret)
+    os.chmod(fernet_secret_file, 0o100400)
+
+    return authdb_path, creds, fernet_secret_file
+
+
 
 ##########
 ## MAIN ##
 ##########
+
 def main():
 
     # parse the command line
@@ -209,15 +298,41 @@ def main():
     ###################
 
     MAXWORKERS = options.backgroundworkers
-    FERNETSECRET = authdb.get_secret_token('LCC_FERNETSECRET',
-                                           os.path.join(
-                                               options.basedir,
-                                               '.lccserver.secret-fernet'
-                                           ),
-                                           LOGGER)
 
     # use the local sqlite DB as the default auth DB
     AUTHDB_SQLITE = os.path.join(options.basedir, '.authdb.sqlite')
+
+    # search for the Fernet secret in either the environment variable
+    # or the secret file path
+    try:
+        FERNETSECRET = authdb.get_secret_token(options.secretenv,
+                                               os.path.join(
+                                                   options.basedir,
+                                                   options.secretfile
+                                               ),LOGGER)
+
+    except Exception as e:
+
+        if ( (not os.path.exists(AUTHDB_SQLITE)) or
+             (not os.path.exists(options.authdb.replace('sqlite:///',''))) ):
+
+            authdb_p, creds, fernet_file = autogen_secrets_authdb(
+                options.basedir,
+                LOGGER
+            )
+
+            FERNETSECRET = authdb.get_secret_token(options.secretenv,
+                                                   os.path.join(
+                                                       options.basedir,
+                                                       options.secretfile
+                                                   ),LOGGER)
+
+        else:
+            raise IOError("Auth DB exists, "
+                          "but no secret key was provided. "
+                          "Use the %s environment variable to pass "
+                          "this in." % options.envsecret)
+
 
     # pass the DSN to the SQLAlchemy engine
     if os.path.exists(AUTHDB_SQLITE):
@@ -297,8 +412,8 @@ def main():
     ######################
 
     # register the signal callbacks
-    signal.signal(signal.SIGINT, recv_sigint)
-    signal.signal(signal.SIGTERM, recv_sigint)
+    signal.signal(signal.SIGINT, _recv_sigint)
+    signal.signal(signal.SIGTERM, _recv_sigint)
 
     # make sure the port we're going to listen on is ok
     # inspired by how Jupyter notebook does this
