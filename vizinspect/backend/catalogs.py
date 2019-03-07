@@ -38,6 +38,7 @@ LOGEXCEPTION = LOGGER.exception
 
 import os.path
 import pandas as pd
+from datetime import datetime
 
 
 #########################
@@ -47,6 +48,7 @@ import pandas as pd
 def load_catalog(catalog_fpath,
                  review_mode=False,
                  flags_to_use=('candy','junk','tidal','cirrus'),
+                 load_comments=True,
                  **pdkwargs):
     '''This loads the catalog into a CSV file.
 
@@ -67,20 +69,59 @@ def load_catalog(catalog_fpath,
         These are the flag column names to add into the catalog when loading it
         for the first time.
 
+    load_comments : bool
+        If this is True, will load comments from the
+        `{catalog_basename}-comments.csv` file associated with this catalog. The
+        comments CSV is a file containing the following columns::
+
+            source_index
+            user
+            datetime
+            comment_text
+
+        In this way, we can load multiple people's comments for each object in
+        the current catalog.
+
     pdkwargs : extra keyword arguments
         All of these will passed directly to the `pandas.read_csv` function.
 
     Returns
     -------
 
-    pandas DataFrame
-        A pandas DataFrame with the catalog contents is returned.
+    pandas DataFrame, comments DataFrame : tuple
+        A tuple of two DataFrames is returned:
+
+        - A pandas DataFrame with the catalog contents
+        - A pandas DataFrame with the catalog comments or None if
+          `load_comments` is False
 
     '''
 
+    # read the catalog
     catalog = pd.read_csv(catalog_fpath, **pdkwargs)
 
-    # add in the extra columns we need
+    # get the associated comments file
+    comment_csv_file = '{basename}-comments.csv'.format(
+        os.path.splitext(os.path.basename(catalog_fpath))[0]
+    )
+    comment_csv_fpath = os.path.join(os.path.dirname(catalog_fpath),
+                                     comment_csv_file)
+
+    if os.path.exists(comment_csv_fpath) and load_comments:
+
+        comments = pd.read_csv(comment_csv_fpath, **pdkwargs)
+
+    elif (not os.path.exists(comment_csv_fpath)) and load_comments:
+
+        comments = {'source_index':[0],
+                    'user':[''],
+                    'datetime':[datetime.utcnow()],
+                    'comment_text':['']}
+    else:
+        comments = None
+
+    # add in the extra columns we need if we're loading this catalog for the
+    # first time
     if not review_mode:
 
         # add in the colors columns
@@ -93,20 +134,17 @@ def load_catalog(catalog_fpath,
         for flag in flags_to_use:
             catalog[flag] = -1
 
-        # add the notes column
-        catalog['notes'] = "no notes yet for this object."
-
-    return catalog
+    return catalog, comments
 
 
 
 def save_catalog(catalog,
                  catalog_fpath,
+                 save_comments=None,
                  indexcol=False,
                  overwrite=False,
                  **pdkwargs):
-    '''
-    This writes the catalog to the given path.
+    '''This writes the catalog to the given path.
 
     Parameters
     ----------
@@ -116,6 +154,12 @@ def save_catalog(catalog,
 
     catalog_fpath: str
         The CSV file to write the catalog to.
+
+    save_comments : pandas.DataFrame or None
+        This is the comments table associated with the objects in the current
+        catalog. If this is provided, the comments table will be saved to a CSV
+        file alongside the catalog.
+
 
     indexcol : bool
         If True, will also write the index column to the CSV.
@@ -129,8 +173,10 @@ def save_catalog(catalog,
     Returns
     -------
 
-    bool
-        If True, file writing was successful. If not, it failed.
+    (catalog_file, comments_file) : tuple
+        The name of the catalog file written. Optionally, the name of the
+        comments file written if `save_comments` was a pd.DataFrame, None if
+        this was not provided..
 
     '''
 
@@ -139,7 +185,28 @@ def save_catalog(catalog,
             'overwrite = False and catalog exists at: %s, not overwriting' %
             catalog_fpath
         )
-        return False
+        return None, None
 
     else:
-        return catalog.to_csv(catalog_fpath, index=indexcol, **pdkwargs)
+
+        catalog.to_csv(catalog_fpath, index=indexcol, **pdkwargs)
+
+        if isinstance(save_comments, pd.DataFrame):
+
+            # get the associated comments file
+            comment_csv_file = '{basename}-comments.csv'.format(
+                os.path.splitext(os.path.basename(catalog_fpath))[0]
+            )
+            comment_csv_fpath = os.path.join(os.path.dirname(catalog_fpath),
+                                             comment_csv_file)
+
+
+            save_comments.to_csv(comment_csv_fpath,
+                                 index=indexcol,
+                                 **pdkwargs)
+
+            return catalog_fpath, comment_csv_fpath
+
+        else:
+
+            return catalog_fpath, None

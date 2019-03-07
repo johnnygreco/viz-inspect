@@ -145,3 +145,9 @@ class IndexHandler(BaseHandler):
             siteinfo=self.siteinfo,
             current_user=self.current_user,
         )
+
+
+
+#########################
+## OPERATIONS HANDLERS ##
+#########################
