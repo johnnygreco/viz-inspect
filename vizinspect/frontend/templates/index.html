@@ -31,24 +31,26 @@
      remove -fluid below to wrap to ususal Bootstrap grid -->
 <div class="container-fluid">
 
-  <!-- this contains the save controls -->
-  <div class="row mt-2">
-    <div class="col-12 text-center" >
-      <button type="button" id="hsc-map-at-loc"
-              class="btn btn-outline-secondary btn-lg">See hscMap</button>
-    </div>
-  </div>
-
   <div class="row mt-4" >
 
     <!-- this contains the main viewer and buttons -->
     <div class="col-sm-12 col-md-9">
 
+      <!-- hscMap controls -->
+      <div class="row">
+        <div class="col-12 text-center" >
+          <button type="button" id="hsc-map-at-loc"
+                  class="btn btn-outline-secondary btn-sm">
+            hscMap at this location
+          </button>
+        </div>
+      </div>
+
       <!-- viewer row -->
-      <div class="row" >
+      <div class="row mt-4" >
         <div class="col-sm-12">
 
-          <figure class="figure">
+          <figure class="figure d-flex justify-content-center align-items-center">
             <img src="https://spaceholder.cc/800x600"
                  class="figure-img img-fluid"
                  id="galaxy-main-plot"
