@@ -31,7 +31,8 @@
   <!-- this contains the save controls -->
   <div class="row mt-2">
     <div class="col-12 text-center" >
-      <button type="button" class="btn btn-outline-secondary btn-lg">See hscMap</button>
+      <button type="button" id="hsc-map-at-loc"
+              class="btn btn-outline-secondary btn-lg">See hscMap</button>
     </div>
   </div>
 
@@ -45,8 +46,14 @@
 
         <div class="col-sm-12 col-md-8">
           <figure class="figure">
-            <img src="https://spaceholder.cc/800x600" class="figure-img img-fluid rounded" alt="A generic square placeholder image with rounded corners in a figure.">
-            <figcaption class="figure-caption text-center">This is a neat galaxy caption.</figcaption>
+            <img src="https://spaceholder.cc/800x600"
+                 class="figure-img img-fluid"
+                 id="galaxy-image"
+                 data-objectid="null"
+                 data-sourceindex="null"
+                 data-ra="null"
+                 data-dec="null"
+                 alt="Galaxy image.">
           </figure>
         </div>
 
@@ -55,8 +62,12 @@
           <div class="row" >
             <div class="col-12" >
               <figure class="figure">
-                <img src="https://spaceholder.cc/300x200" class="figure-img img-fluid rounded" alt="A generic square placeholder image with rounded corners in a figure.">
-                <figcaption class="figure-caption text-center">color plot</figcaption>
+                <img src="https://spaceholder.cc/300x200"
+                     class="figure-img img-fluid"
+                     data-objectid="null"
+                     data-sourceindex="null"
+                     id="color-color-plot"
+                     alt="Color-color plot.">
               </figure>
             </div>
           </div>
@@ -64,8 +75,12 @@
           <div class="row" >
             <div class="col-12" >
               <figure class="figure">
-                <img src="https://spaceholder.cc/300x200" class="figure-img img-fluid rounded" alt="A generic square placeholder image with rounded corners in a figure.">
-                <figcaption class="figure-caption text-center">half-light radius plot</figcaption>
+                <img src="https://spaceholder.cc/300x200"
+                     class="figure-img img-fluid"
+                     data-objectid="null"
+                     data-sourceindex="null"
+                     id="half-light-plot"
+                     alt="Half-light radius plot.">
               </figure>
             </div>
           </div>
@@ -111,7 +126,7 @@
               <button type="button" class="btn btn-primary">yes</button>
               <button type="button" class="btn btn-success">no</button>
               <button type="button" class="btn btn-warning">tidal</button>
-              <button type="button" class="btn btn-secondary">lol what?</button>
+              <button type="button" class="btn btn-secondary">unknown</button>
             </div>
             <div class="btn-group ml-auto" role="group" aria-label="Third group">
               <button type="button" class="btn btn-outline-info">next</button>
@@ -125,13 +140,14 @@
         <div class="col-12" >
           <form>
             <div class="form-group">
-              <label for="exampleInputEmail1">Source index</label>
-              <input type="email" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp" placeholder="The current object's source index">
+              <label for="source-index">Source index</label>
+              <input type="text" class="form-control" id="source-index"
+                     placeholder="The current object's source index">
             </div>
             <div class="form-group">
-              <label for="exampleInputPassword1">Comments on this object</label>
-              <textarea class="form-control" id="comments-textbox">
-                 Comments go here
+              <label for="object-notes">Notes on this object</label>
+              <textarea class="form-control" id="object-notes" rows="10">
+                 Notes for this object go here. Markdown formatting is supported.
               </textarea>
             </div>
             <button type="submit" class="btn btn-primary">Save</button>
@@ -145,24 +161,28 @@
     <div class="col-sm-12 col-md-3">
       <h4>All users' comments</h4>
 
-      <div class="card mt-3">
-        <div class="card-header">
-          Someone (hours ago)
-        </div>
-        <div class="card-body">
-          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
-            posuere erat a ante.</p>
-        </div>
-      </div>
+      <div class="all-comments-stream" >
 
-      <div class="card mt-3">
-        <div class="card-header">
-          Someone else (minutes ago)
+        <div class="card mt-3">
+          <div class="card-header">
+            Someone else (minutes ago)
+          </div>
+          <div class="card-body">
+            <p>Nil Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              posuere erat a ante.</p>
+          </div>
         </div>
-        <div class="card-body">
-          <p>Nil Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
-            posuere erat a ante.</p>
+
+        <div class="card mt-3">
+          <div class="card-header">
+            Someone (hours ago)
+          </div>
+          <div class="card-body">
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              posuere erat a ante.</p>
+          </div>
         </div>
+
       </div>
 
     </div>
