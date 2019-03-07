@@ -71,7 +71,7 @@ def load_galaxy_image(object_index, basedir, images_subdir='images'):
     Returns
     -------
 
-    image : np.array or PIL Image
+    image : np.array
         This returns an image that's loadable directly using
         `matplotlib.pyplot.imshow`.
 
@@ -100,7 +100,7 @@ def make_main_plot(catalog,
                    basedir,
                    plot_fontsize=15,
                    images_subdir='images',
-                   site_datadir='viz-inspect-images',
+                   site_datadir='viz-inspect-data',
                    outfile=None):
     '''This generates the main plot.
 
@@ -143,7 +143,7 @@ def make_main_plot(catalog,
     '''
 
     plot_fontsize = 15
-    fig = Figure(figsize=(10, 6))
+    fig = plt.figure(figsize=(10, 6))
     adjust = dict(wspace=0.13,
                   hspace=0.25,
                   bottom=0.1,
@@ -163,12 +163,14 @@ def make_main_plot(catalog,
 
     # FIXME: check if the image's origin really is 0,0 in the bottom-left. If
     # not, can remove origin kwarg below.
-    ax_img.imshow(img,origin='lower')
+    ax_img.imshow(img)
 
+    # make the color plot
     ax_top.scatter(
         catalog['g-i'],
         catalog['g-r'],
-        alpha=0.3
+        alpha=0.3,
+        rasterized=True
     )
     ax_top.set_xlabel('$g-i$', fontsize=plot_fontsize)
     ax_top.set_ylabel('$g-r$', fontsize=plot_fontsize)
@@ -177,6 +179,12 @@ def make_main_plot(catalog,
     ax_top.set_ylim(catalog['g-r'].min()-0.1,
                     catalog['g-r'].max()+0.1)
 
+    # overplot this object as a star
+    ax_top.scatter(catalog.loc[source_index,'g-i'],
+                   catalog.loc[source_index,'g-r'],
+                   c='k', s=300, marker='*', edgecolor='k')
+
+    # make the half-light radius and surface-brightness plot
     ax_bot.scatter(
         catalog['r_e'],
         catalog.mu_e_ave_forced_g,
@@ -191,6 +199,11 @@ def make_main_plot(catalog,
     ax_bot.set_xlim(0, 16)
     ax_bot.set_ylim(24, 29)
 
+    # overplot this object as a star
+    ax_bot.scatter(catalog.loc[source_index,'r_e'],
+                   catalog.loc[source_index,'mu_e_ave_forced_g'],
+                   c='k', s=300, marker='*', edgecolor='k')
+
     if outfile is None:
 
         outfile = os.path.join(basedir,
@@ -198,5 +211,6 @@ def make_main_plot(catalog,
                                'current-object-plot.png')
 
     fig.savefig(outfile,dpi=100)
+    plt.close('all')
 
     return outfile

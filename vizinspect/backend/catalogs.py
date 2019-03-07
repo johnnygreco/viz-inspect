@@ -76,7 +76,7 @@ def load_catalog(catalog_fpath,
 
             source_index
             user
-            datetime
+            datetime_utc
             comment_text
 
         In this way, we can load multiple people's comments for each object in
@@ -102,7 +102,7 @@ def load_catalog(catalog_fpath,
 
     # get the associated comments file
     comment_csv_file = '{basename}-comments.csv'.format(
-        os.path.splitext(os.path.basename(catalog_fpath))[0]
+        basename=os.path.splitext(os.path.basename(catalog_fpath))[0]
     )
     comment_csv_fpath = os.path.join(os.path.dirname(catalog_fpath),
                                      comment_csv_file)
@@ -115,8 +115,10 @@ def load_catalog(catalog_fpath,
 
         comments = {'source_index':[0],
                     'user':[''],
-                    'datetime':[datetime.utcnow()],
+                    'datetime_utc':[datetime.utcnow()],
                     'comment_text':['']}
+        comments = pd.DataFrame(comments)
+
     else:
         comments = None
 
@@ -139,7 +141,8 @@ def load_catalog(catalog_fpath,
 
 
 def save_catalog(catalog,
-                 catalog_fpath,
+                 basedir,
+                 catalog_fpath=None,
                  save_comments=None,
                  indexcol=False,
                  overwrite=False,
@@ -152,14 +155,17 @@ def save_catalog(catalog,
     catalog : pd.DataFrame
         This is an existing catalog loaded into a pandas DataFrame.
 
-    catalog_fpath: str
-        The CSV file to write the catalog to.
+    basedir : str
+        The base directory for the viz-inspect server.
+
+    catalog_fpath: str or None
+        The CSV file to write the catalog to. If this is None, will write the
+        catalog to a file called reviewed-catalog.csv in the `basedir`.
 
     save_comments : pandas.DataFrame or None
         This is the comments table associated with the objects in the current
         catalog. If this is provided, the comments table will be saved to a CSV
         file alongside the catalog.
-
 
     indexcol : bool
         If True, will also write the index column to the CSV.
@@ -180,7 +186,12 @@ def save_catalog(catalog,
 
     '''
 
-    if os.path.exists(os.path.abspath(catalog_fpath)) and not overwrite:
+    if not catalog_fpath:
+        catalog_fpath = os.path.join(basedir,'reviewed-catalog.csv')
+
+    if (catalog_fpath and
+        os.path.exists(os.path.abspath(catalog_fpath)) and
+        not overwrite):
         LOGERROR(
             'overwrite = False and catalog exists at: %s, not overwriting' %
             catalog_fpath
@@ -195,7 +206,7 @@ def save_catalog(catalog,
 
             # get the associated comments file
             comment_csv_file = '{basename}-comments.csv'.format(
-                os.path.splitext(os.path.basename(catalog_fpath))[0]
+                basename=os.path.splitext(os.path.basename(catalog_fpath))[0]
             )
             comment_csv_fpath = os.path.join(os.path.dirname(catalog_fpath),
                                              comment_csv_file)
