@@ -19,7 +19,7 @@
 
 <!-- this checks if we're logged in. if we are, show the main interface. -->
 {% if current_user['user_role'] in ('authenticated','staff','superuser') %}
-<div class="container" >
+<div class="container-fluid" >
   <div class="row" >
     <div class="col-12" >
       Hello there, {{ current_user['email'] }}!
@@ -27,7 +27,8 @@
   </div>
 </div>
 
-<!-- set the container width to window width. remove -fluid below to wrap to 960 px -->
+<!-- set the container width to window width.
+     remove -fluid below to wrap to 960 px -->
 <div class="container-fluid">
 
   <!-- this contains the save controls -->
@@ -48,7 +49,7 @@
 
         <div class="col-sm-12 col-md-8">
           <figure class="figure">
-            <img src="https://spaceholder.cc/800x600"
+            <img src="https://spaceholder.cc/600x400"
                  class="figure-img img-fluid"
                  id="galaxy-image"
                  data-objectid="null"
@@ -117,7 +118,7 @@
       </div>
 
       <!-- control row -->
-      <div class="row" >
+      <div class="row mt-2" >
         <div class="col-12" >
           <div class="btn-toolbar justify-content-between"
                role="toolbar" aria-label="Toolbar with button groups">
@@ -138,7 +139,7 @@
       </div>
 
       <!-- this contains the source index and notes -->
-      <div class="row" >
+      <div class="row mt-2" >
         <div class="col-12" >
           <form>
             <div class="form-group">
@@ -148,11 +149,14 @@
             </div>
             <div class="form-group">
               <label for="object-notes">Notes on this object</label>
-              <textarea class="form-control" id="object-notes" rows="10">
+              <textarea class="form-control" id="object-notes" rows="5">
                  Notes for this object go here. Markdown formatting is supported.
               </textarea>
             </div>
-            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="submit" class="btn btn-primary"
+                    id="save-current-object">
+              Save notes and classification
+            </button>
           </form>
         </div>
       </div>
