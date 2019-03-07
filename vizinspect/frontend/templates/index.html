@@ -17,6 +17,7 @@
   </div>
 </div>
 
+<!-- this checks if we're logged in. if we are, show the main interface. -->
 {% if current_user['user_role'] in ('authenticated','staff','superuser') %}
 <div class="container" >
   <div class="row" >
@@ -26,7 +27,8 @@
   </div>
 </div>
 
-<div class="container">
+<!-- set the container width to window width. remove -fluid below to wrap to 960 px -->
+<div class="container-fluid">
 
   <!-- this contains the save controls -->
   <div class="row mt-2">
@@ -188,10 +190,13 @@
     </div>
 
   </div>
+
+  <!-- end of the main container -->
 </div>
 
-
+<!-- if we're not logged in, show the welcome message only -->
 {% else %}
+
 <div class="container" >
   <div class="row" >
     <div class="col-12" >
@@ -199,6 +204,7 @@
     </div>
   </div>
 </div>
+
 {% end %}
 
 
