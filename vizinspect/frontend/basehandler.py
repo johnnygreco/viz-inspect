@@ -336,10 +336,11 @@ class BaseHandler(tornado.web.RequestHandler):
                 "Sorry, it appears that you're not authorized to "
                 "view the page you were trying to get to. "
                 "If you believe this is in error, please contact "
-                "the admins of this LCC-Server instance."
+                "the admins of this server instance."
             ),
-            page_title="403 - You cannot access this page.",
+            page_title="403 - You cannot access this page",
             siteinfo=self.siteinfo,
+            user_account_box=self.render_user_account_box(),
         )
 
 
