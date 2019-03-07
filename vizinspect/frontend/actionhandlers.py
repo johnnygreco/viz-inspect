@@ -3,7 +3,7 @@
 # indexhandlers.py - Waqas Bhatti (wbhatti@astro.princeton.edu) - Apr 2018
 
 '''
-These are Tornado handlers for the index pages.
+These are Tornado handlers for the AJAX actions.
 
 '''
 
@@ -84,10 +84,8 @@ from .basehandler import BaseHandler
 ## MAIN INDEX PAGE ##
 #####################
 
-class IndexHandler(BaseHandler):
-    '''This handles the index page.
-
-    This page shows the current project.
+class LoadObjectHandler(BaseHandler):
+    '''This handles the /api/load-object endpoint.
 
     '''
 
@@ -102,7 +100,9 @@ class IndexHandler(BaseHandler):
                    session_expiry,
                    fernetkey,
                    ratelimit,
-                   cachedir):
+                   cachedir,
+                   catalog_csv,
+                   comments_csv):
         '''
         handles initial setup.
 
@@ -122,11 +122,78 @@ class IndexHandler(BaseHandler):
         self.ratelimit = ratelimit
         self.cachedir = cachedir
 
+        self.catalog_csv = catalog_csv
+        self.comments_csv = comments_csv
 
 
     @gen.coroutine
-    def get(self):
-        '''This handles GET requests to the index page.
+    def get(self, source_index):
+        '''This handles GET requests to the /api/load-object/<index> endpoint.
+
+        Gets catalog and comment info, plots the object if not already plotted,
+        and then returns JSON with everything.
+
+
+        '''
+
+        self.render(
+            'index.html',
+            flash_messages=self.render_flash_messages(),
+            user_account_box=self.render_user_account_box(),
+            page_title='viz-inspect',
+            siteinfo=self.siteinfo,
+            current_user=self.current_user,
+        )
+
+
+
+class SaveObjectHandler(BaseHandler):
+    '''This handles the /api/save-object endpoint.
+
+    '''
+
+    def initialize(self,
+                   currentdir,
+                   templatepath,
+                   assetpath,
+                   executor,
+                   basedir,
+                   siteinfo,
+                   authnzerver,
+                   session_expiry,
+                   fernetkey,
+                   ratelimit,
+                   cachedir,
+                   catalog_csv,
+                   comment_csv):
+        '''
+        handles initial setup.
+
+        '''
+
+        self.currentdir = currentdir
+        self.templatepath = templatepath
+        self.assetpath = assetpath
+        self.executor = executor
+        self.basedir = basedir
+        self.siteinfo = siteinfo
+        self.authnzerver = authnzerver
+        self.session_expiry = session_expiry
+        self.fernetkey = fernetkey
+        self.ferneter = Fernet(fernetkey)
+        self.httpclient = AsyncHTTPClient(force_instance=True)
+        self.ratelimit = ratelimit
+        self.cachedir = cachedir
+
+        self.catalog_csv = catalog_csv
+        self.comment_csv = comment_csv
+
+
+    @gen.coroutine
+    def post(self):
+        '''This handles POST requests to the /api/save-object endpoint.
+
+        This only saves the current object.
 
         '''
 

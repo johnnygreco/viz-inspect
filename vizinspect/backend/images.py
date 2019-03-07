@@ -45,7 +45,6 @@ matplotlib.rcParams['font.family'] = 'serif'
 matplotlib.rcParams['mathtext.fontset'] = 'cm'
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
 
 
 
