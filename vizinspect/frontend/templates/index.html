@@ -28,7 +28,7 @@
 </div>
 
 <!-- set the container width to window width.
-     remove -fluid below to wrap to 960 px -->
+     remove -fluid below to wrap to ususal Bootstrap grid -->
 <div class="container-fluid">
 
   <!-- this contains the save controls -->
@@ -46,50 +46,19 @@
 
       <!-- viewer row -->
       <div class="row" >
+        <div class="col-sm-12">
 
-        <div class="col-sm-12 col-md-8">
           <figure class="figure">
-            <img src="https://spaceholder.cc/600x400"
+            <img src="https://spaceholder.cc/800x600"
                  class="figure-img img-fluid"
-                 id="galaxy-image"
-                 data-objectid="null"
+                 id="galaxy-main-plot"
                  data-sourceindex="null"
                  data-ra="null"
                  data-dec="null"
                  alt="Galaxy image.">
           </figure>
-        </div>
-
-        <div class="col-sm-12 col-md-4">
-
-          <div class="row" >
-            <div class="col-12" >
-              <figure class="figure">
-                <img src="https://spaceholder.cc/300x200"
-                     class="figure-img img-fluid"
-                     data-objectid="null"
-                     data-sourceindex="null"
-                     id="color-color-plot"
-                     alt="Color-color plot.">
-              </figure>
-            </div>
-          </div>
-
-          <div class="row" >
-            <div class="col-12" >
-              <figure class="figure">
-                <img src="https://spaceholder.cc/300x200"
-                     class="figure-img img-fluid"
-                     data-objectid="null"
-                     data-sourceindex="null"
-                     id="half-light-plot"
-                     alt="Half-light radius plot.">
-              </figure>
-            </div>
-          </div>
 
         </div>
-
       </div>
 
       <!-- this contains the info on the current object -->
@@ -163,11 +132,11 @@
 
     </div>
 
-    <!-- this contains the commment stream and a comment box -->
+    <!-- this contains all other user's comments -->
     <div class="col-sm-12 col-md-3">
       <h4>All users' comments</h4>
 
-      <div class="all-comments-stream" >
+      <div class="all-object-comments" >
 
         <div class="card mt-3">
           <div class="card-header">
