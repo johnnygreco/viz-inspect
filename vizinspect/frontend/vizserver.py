@@ -205,7 +205,8 @@ def main():
 
 
     # check if there's a first_start_done file to see if we need to copy over a
-    # site-info.json and email-server.json file to the basedir
+    # site-info.json and email-server.json file to the basedir. also copy over
+    # the example bits
     first_start_done_file = os.path.join(options.basedir,
                                          '.first_start_done')
     first_start_done = os.path.exists(first_start_done_file)
@@ -229,6 +230,22 @@ def main():
 
         # make a default data directory
         os.makedirs(os.path.join(options.basedir,'viz-inspect-data'))
+
+        # copy over the test-catalog.csv file
+        shutil.copy(os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                                 '..',
+                                                 'data',
+                                                 'test-catalog.csv')),
+                    os.path.abspath(options.basedir))
+
+
+        # copy over the test plot PNG
+        shutil.copy(os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                                 '..',
+                                                 'data',
+                                                 'test-object-plot.png')),
+                    os.path.join(options.basedir,'viz-inspect-data'))
+
 
         # set the first start done flag
         with open(first_start_done_file,'w') as outfd:
