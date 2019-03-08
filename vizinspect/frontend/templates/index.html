@@ -31,7 +31,7 @@
      remove -fluid below to wrap to ususal Bootstrap grid -->
 <div class="container-fluid">
 
-  <div class="row mt-4" >
+  <div class="row" >
 
     <!-- this contains the main viewer and buttons -->
     <div class="col-sm-12 col-md-9">
@@ -40,25 +40,68 @@
       <div class="row">
         <div class="col-12 text-center" >
           <button type="button" id="hsc-map-at-loc"
-                  class="btn btn-outline-secondary btn-sm">
+                  class="btn btn-link">
             hscMap at this location
           </button>
         </div>
       </div>
 
-      <!-- viewer row -->
-      <div class="row mt-4" >
-        <div class="col-sm-12">
+      <div class="row justify-content-between">
 
-          <figure class="figure d-flex justify-content-center align-items-center">
-            <img src="https://spaceholder.cc/800x600"
-                 class="figure-img img-fluid"
-                 id="galaxy-main-plot"
-                 data-sourceindex="null"
-                 data-ra="null"
-                 data-dec="null"
-                 alt="Galaxy image.">
-          </figure>
+        <div class="col-3 d-flex justify-content-start">
+
+          <button type="button"
+                  class="btn btn-outline-info"
+                  id="prev-object-link">
+            &larr; prev
+          </button>
+
+        </div>
+
+        <div class="col-6 d-flex justify-content-center" >
+
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text"
+                    id="current-index">Current source</span>
+            </div>
+            <input type="text"
+                   id="current-source-index"
+                   class="form-control"
+                   placeholder="current object source index"
+                   aria-label="source index" aria-describedby="current-index">
+            <div class="input-group-append">
+              <button class="btn btn-outline-success"
+                      type="button"
+                      id="jump-source-index">Jump</button>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="col-3 d-flex justify-content-end">
+
+          <button type="button"
+                  class="btn btn-outline-info"
+                  id="next-object-link">
+            next &rarr;
+          </button>
+
+        </div>
+
+      </div>
+
+      <!-- viewer row -->
+      <div class="row mt-2" >
+        <div class="d-flex col-sm-12 justify-content-center">
+
+          <img src="/viz-inspect-data/current-object-plot.png"
+               class="figure-img img-fluid"
+               id="galaxy-main-plot"
+               data-sourceindex="null"
+               data-ra="null"
+               data-dec="null"
+               alt="Galaxy image.">
 
         </div>
       </div>
@@ -69,6 +112,9 @@
           <table class="table table-sm" >
             <thead>
               <tr>
+                <th><code>object id</code></th>
+                <th><code>ra [deg]</code></th>
+                <th><code>dec [deg]</code></th>
                 <th><code>r_eff</code></th>
                 <th><code>mu_0(g)</code></th>
                 <th><code>g-i color</code></th>
@@ -78,33 +124,32 @@
             </thead>
             <tbody>
               <tr>
+                <td id="current-objectid-val" >1</td>
+                <td id="current-ra-val" >30.0</td>
+                <td id="current-dec-val" >10.0</td>
                 <td id="current-reff-val" >1</td>
                 <td id="current-mug0-val" >2</td>
                 <td id="current-gicolor-val" >3</td>
                 <td id="current-grcolor-val" >4</td>
-                <td id="current-objectclass-val" >unknown</td>
+                <td id="current-objectflag-val" >none</td>
               </tr>
           </table>
         </div>
       </div>
 
       <!-- control row -->
-      <div class="row mt-2" >
+      <div class="row" >
         <div class="col-12" >
-          <div class="btn-toolbar justify-content-between"
+          <div class="btn-toolbar justify-content-center"
                role="toolbar" aria-label="Toolbar with button groups">
-            <div class="btn-group mr-auto" role="group" aria-label="First group">
-              <button type="button" class="btn btn-outline-info">previous</button>
-            </div>
+
             <div class="btn-group" role="group" aria-label="Second group">
               <button type="button" class="btn btn-primary">yes</button>
-              <button type="button" class="btn btn-success">no</button>
-              <button type="button" class="btn btn-warning">tidal</button>
-              <button type="button" class="btn btn-secondary">unknown</button>
+              <button type="button" class="btn btn-primary">no</button>
+              <button type="button" class="btn btn-primary">tidal</button>
+              <button type="button" class="btn btn-primary">unknown</button>
             </div>
-            <div class="btn-group ml-auto" role="group" aria-label="Third group">
-              <button type="button" class="btn btn-outline-info">next</button>
-            </div>
+
           </div>
         </div>
       </div>
@@ -114,17 +159,13 @@
         <div class="col-12" >
           <form>
             <div class="form-group">
-              <label for="source-index">Source index</label>
-              <input type="text" class="form-control" id="source-index"
-                     placeholder="The current object's source index">
-            </div>
-            <div class="form-group">
               <label for="object-notes">Notes on this object</label>
-              <textarea class="form-control" id="object-notes" rows="5">
-                 Notes for this object go here. Markdown formatting is supported.
+              <textarea class="form-control" id="object-notes" rows="5"
+                        placeholder="Notes for this object go here. Markdown formatting is supported.">
               </textarea>
             </div>
-            <button type="submit" class="btn btn-primary"
+
+            <button type="submit" class="btn btn-success"
                     id="save-current-object">
               Save notes and classification
             </button>
