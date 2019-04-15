@@ -38,7 +38,35 @@ LOGEXCEPTION = LOGGER.exception
 
 import os.path
 import pandas as pd
-from datetime import datetime
+
+try:
+
+    from datetime import datetime, timezone, timedelta
+    utc = timezone.utc
+
+except Exception as e:
+
+    from datetime import datetime, timedelta, tzinfo
+    ZERO = timedelta(0)
+
+    class UTC(tzinfo):
+        """UTC"""
+
+        def utcoffset(self, dt):
+            return ZERO
+
+        def tzname(self, dt):
+            return "UTC"
+
+        def dst(self, dt):
+            return ZERO
+
+    utc = UTC()
+
+from sqlalchemy import select, update
+from sqlalchemy.dialects import postgresql as pg
+
+from .database import get_postgres_db, json_dumps
 
 
 #########################
@@ -46,11 +74,13 @@ from datetime import datetime
 #########################
 
 def load_catalog(catalog_fpath,
-                 review_mode=False,
+                 images_dpath,
+                 dbinfo,
+                 dbkwargs=None,
+                 object_imagefile_pattern='hugs-{objectid}.png',
                  flags_to_use=('candy','junk','tidal','cirrus'),
-                 load_comments=True,
                  **pdkwargs):
-    '''This loads the catalog into a CSV file.
+    '''This loads the catalog into the vizinspect database object_catalog table.
 
     Parameters
     ----------
@@ -58,29 +88,30 @@ def load_catalog(catalog_fpath,
     catalog_fpath : str
         The path to the CSV to load.
 
-    review_mode : bool
-        If False, doesn't assume the input catalog has been opened before,
-        therefore doesn't have all the extra cols we add after loading it for
-        the first time. The loaded catalog will then have various columns added
-        to it. If True, will open the catalog and return it directly and not
-        attempt to add the extra columns.
+    images_dpath : str
+        The path to the images directory.
+
+    dbinfo : tuple
+        This is a tuple of two items:
+
+        - the database URL or the connection instance to use
+        - the database metadata object
+
+        If the database URL is provided, a new engine will be used. If the
+        connection itself is provided, it will be re-used.
+
+    dbkwargs : dict or None
+        A dict of kwargs to pass to the database open function.
+
+    object_imagefile_pattern : str
+        A template for the filename corresponding to the HUGS image for each
+        object. This must have a '{objectid}' key somewhere in it; this will be
+        filled in for each object and the image will be searched for in ther
+        `images_dpath`.
 
     flags_to_use : sequence of str
         These are the flag column names to add into the catalog when loading it
         for the first time.
-
-    load_comments : bool
-        If this is True, will load comments from the
-        `{catalog_basename}-comments.csv` file associated with this catalog. The
-        comments CSV is a file containing the following columns::
-
-            source_index
-            user
-            datetime_utc
-            comment_text
-
-        In this way, we can load multiple people's comments for each object in
-        the current catalog.
 
     pdkwargs : extra keyword arguments
         All of these will passed directly to the `pandas.read_csv` function.
@@ -88,136 +119,571 @@ def load_catalog(catalog_fpath,
     Returns
     -------
 
-    pandas DataFrame, comments DataFrame : tuple
-        A tuple of two DataFrames is returned:
-
-        - A pandas DataFrame with the catalog contents
-        - A pandas DataFrame with the catalog comments or None if
-          `load_comments` is False
+    bool
+        True if all objects were loaded successfully into the database.
 
     '''
 
     # read the catalog
     catalog = pd.read_csv(catalog_fpath, **pdkwargs)
 
-    # get the associated comments file
-    comment_csv_file = '{basename}-comments.csv'.format(
-        basename=os.path.splitext(os.path.basename(catalog_fpath))[0]
-    )
-    comment_csv_fpath = os.path.join(os.path.dirname(catalog_fpath),
-                                     comment_csv_file)
-
-    if os.path.exists(comment_csv_fpath) and load_comments:
-
-        comments = pd.read_csv(comment_csv_fpath, **pdkwargs)
-
-    elif (not os.path.exists(comment_csv_fpath)) and load_comments:
-
-        comments = {'source_index':[0],
-                    'user':[''],
-                    'datetime_utc':[datetime.utcnow()],
-                    'comment_text':['']}
-        comments = pd.DataFrame(comments)
-
+    #
+    # get the database
+    #
+    dbref, dbmeta = dbinfo
+    if not dbkwargs:
+        dbkwargs = {}
+    if isinstance(dbref, str) and 'postgres' in dbref:
+        if not dbkwargs:
+            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
+        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
+            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
+        elif dbkwargs and 'engine_kwargs' in dbkwargs:
+            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
+        engine, conn, meta = get_postgres_db(dbref,
+                                             dbmeta,
+                                             **dbkwargs)
+    elif isinstance(dbref, str) and 'postgres' not in dbref:
+        raise NotImplementedError(
+            "viz-inspect currently doesn't support non-Postgres databases."
+        )
     else:
-        comments = None
+        engine, conn, meta = None, dbref, dbmeta
+        meta.bind = conn
+    #
+    # end of database get
+    #
 
-    # add in the extra columns we need if we're loading this catalog for the
-    # first time
-    if not review_mode:
+    # get the columns out of the catalog
+    column_list = list(catalog.columns)
+    maincol_list = ['ra','dec']
+    othercol_list = list(set(column_list) - set(maincol_list))
 
-        # add in the colors columns
-        catalog['g-i'] = catalog.m_tot_forced_g - catalog.m_tot
-        catalog['g-i'] = catalog['g-i'] - catalog.A_g + catalog.A_i
-        catalog['g-r'] = catalog.m_tot_forced_g - catalog.m_tot_forced_r
-        catalog['g-r'] = catalog['g-r'] - catalog.A_g + catalog.A_r
+    # the main columns
+    main_cols = catalog[maincol_list].to_dict(orient='records')
+    other_cols = catalog[othercol_list].to_dict(orient='records')
+    now = datetime.now(tz=utc)
 
-        # add the flag columns to the catalog
-        for flag in flags_to_use:
-            catalog[flag] = -1
+    for x,y in zip(main_cols, other_cols):
 
-    return catalog, comments
+        x['extra_columns'] = y
+        x['added'] = now
+        x['updated'] = now
+        x['objectid'] = y['cat-id']
+        x['user_flags'] = {x: False for x in flags_to_use}
+
+    # get the table
+    object_catalog = meta.tables['object_catalog']
+
+    # prepare the insert
+    insert = pg.insert(
+        object_catalog
+    ).values(
+        main_cols
+    )
+
+    # execute the inserts
+    with conn.begin():
+
+        LOGINFO("Inserting object rows...")
+
+        # insert the object rows
+        conn.execute(insert)
+
+        LOGINFO("Inserting object image file paths...")
+
+        # look up the images for each object
+        object_images = [
+            os.path.join(
+                images_dpath,
+                object_imagefile_pattern.format(
+                    objectid=x['objectid']
+                )
+            ) for x in main_cols
+        ]
+        object_images = [
+            (os.path.abspath(x) if os.path.exists(x) else None)
+            for x in object_images
+        ]
+
+        # generate the object insertion rows
+        image_cols = [
+            {'objectid':x,
+             'added':now,
+             'updated':now,
+             'filepath':y}
+            for x,y in zip([a['objectid'] for a in main_cols], object_images)
+        ]
+
+        # get the table
+        object_images = meta.tables['object_images']
+
+        # prepare the insert
+        insert = pg.insert(
+            object_images
+        ).values(
+            image_cols
+        )
+
+        conn.execute(insert)
 
 
+    # close everything down if we were passed a database URL only and had to
+    # make a new engine
+    if engine:
+        conn.close()
+        meta.bind = None
+        engine.dispose()
 
-def save_catalog(catalog,
-                 basedir,
-                 catalog_fpath=None,
-                 save_comments=None,
-                 indexcol=False,
-                 overwrite=False,
-                 **pdkwargs):
-    '''This writes the catalog to the given path.
+    # if we make it to here, the insert was successful
+    LOGINFO('Inserted %s new objects.' % len(catalog))
+    return True
+
+
+########################################
+## GETTING OBJECTS OUT OF THE CATALOG ##
+########################################
+
+def get_object(objectid,
+               dbinfo,
+               dbkwargs=None):
+    '''
+    This gets a single object out of the catalog.
 
     Parameters
     ----------
 
-    catalog : pd.DataFrame
-        This is an existing catalog loaded into a pandas DataFrame.
+    objectid : int
+        The object ID for the object to retrieve.
 
-    basedir : str
-        The base directory for the viz-inspect server.
+    dbinfo : tuple
+        This is a tuple of two items:
 
-    catalog_fpath: str or None
-        The CSV file to write the catalog to. If this is None, will write the
-        catalog to a file called reviewed-catalog.csv in the `basedir`.
+        - the database URL or the connection instance to use
+        - the database metadata object
 
-    save_comments : pandas.DataFrame or None
-        This is the comments table associated with the objects in the current
-        catalog. If this is provided, the comments table will be saved to a CSV
-        file alongside the catalog.
+        If the database URL is provided, a new engine will be used. If the
+        connection itself is provided, it will be re-used.
 
-    indexcol : bool
-        If True, will also write the index column to the CSV.
-
-    overwrite: bool
-        If True, will overwrite an existing catalog at the given path.
-
-    pdkwargs : extra keyword arguments
-        These will be passed directly to the `DataFrame.to_csv` method.
+    dbkwargs : dict or None
+        A dict of kwargs to pass to the database open function.
 
     Returns
     -------
 
-    (catalog_file, comments_file) : tuple
-        The name of the catalog file written. Optionally, the name of the
-        comments file written if `save_comments` was a pd.DataFrame, None if
-        this was not provided..
+    dict
+        Returns all of the object's info as a dict.
 
     '''
 
-    if not catalog_fpath:
-        catalog_fpath = os.path.join(basedir,'reviewed-catalog.csv')
-
-    if (catalog_fpath and
-        os.path.exists(os.path.abspath(catalog_fpath)) and
-        not overwrite):
-        LOGERROR(
-            'overwrite = False and catalog exists at: %s, not overwriting' %
-            catalog_fpath
+    #
+    # get the database
+    #
+    dbref, dbmeta = dbinfo
+    if not dbkwargs:
+        dbkwargs = {}
+    if isinstance(dbref, str) and 'postgres' in dbref:
+        if not dbkwargs:
+            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
+        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
+            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
+        elif dbkwargs and 'engine_kwargs' in dbkwargs:
+            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
+        engine, conn, meta = get_postgres_db(dbref,
+                                             dbmeta,
+                                             **dbkwargs)
+    elif isinstance(dbref, str) and 'postgres' not in dbref:
+        raise NotImplementedError(
+            "PIPE-TrEx currently doesn't support non-Postgres databases."
         )
-        return None, None
+    else:
+        engine, conn, meta = None, dbref, dbmeta
+        meta.bind = conn
+    #
+    # end of database get
+    #
+
+    # prepare the select
+    object_catalog = meta.tables['object_catalog']
+    object_images = meta.tables['object_images']
+    object_comments = meta.tables['object_comments']
+
+    join = object_catalog.join(object_images).outerjoin(object_comments)
+
+    sel = select(
+        [object_catalog.c.objectid,
+         object_catalog.c.ra,
+         object_catalog.c.dec,
+         object_catalog.c.user_flags,
+         object_catalog.c.reviewer_userid,
+         object_catalog.c.extra_columns,
+         object_images.c.filepath,
+         object_comments.c.added,
+         object_comments.c.userid,
+         object_comments.c.user_flags,
+         object_comments.c.contents]
+    ).select_from(
+        join
+    ).where(
+        object_catalog.c.objectid == objectid
+    )
+
+    with conn.begin():
+
+        res = conn.execute(sel)
+        rows = res.fetchall()
+
+    # close everything down if we were passed a database URL only and had to
+    # make a new engine
+    if engine:
+        conn.close()
+        meta.bind = None
+        engine.dispose()
+
+    return rows
+
+
+def get_objects(
+        dbinfo,
+        review_status='all',
+        userid=None,
+        start_keyid=0,
+        end_keyid=50,
+        allinfo=False,
+        dbkwargs=None
+):
+    '''This is used to get object lists filtering on either userids or review
+    status or both.
+
+    Parameters
+    ----------
+
+    dbinfo : tuple
+        This is a tuple of two items:
+
+        - the database URL or the connection instance to use
+        - the database metadata object
+
+        If the database URL is provided, a new engine will be used. If the
+        connection itself is provided, it will be re-used.
+
+    review_status : str
+        This is a string that indicates what kinds of objects to return.
+
+        Choose from:
+
+        - 'all' -> all objects
+        - 'reviewed-all' -> all objects that have been reviewed
+        - 'unreviewed-all' -> all objects that have not been reviewed
+        - 'reviewed-self' -> objects reviewed by this user
+        - 'reviewed-other' -> objects reviewed by other users
+        - 'unreviewed-self' -> objects reviewed by this user
+        - 'unreviewed-other' -> objects reviewed by other users
+
+    userid : int
+        If set, sets the current userid to use in the filters when review_status
+        is one of the -self, -other values.
+
+    allinfo: bool
+        If True, returns all of the object info. If False, returns only the
+        objectids matching the specified criteria.
+
+    dbkwargs : dict or None
+        A dict of kwargs to pass to the database open function.
+
+    Returns
+    -------
+
+    dict
+        Returns all of the object's info as a dict.
+
+    '''
+
+    #
+    # get the database
+    #
+    dbref, dbmeta = dbinfo
+    if not dbkwargs:
+        dbkwargs = {}
+    if isinstance(dbref, str) and 'postgres' in dbref:
+        if not dbkwargs:
+            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
+        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
+            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
+        elif dbkwargs and 'engine_kwargs' in dbkwargs:
+            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
+        engine, conn, meta = get_postgres_db(dbref,
+                                             dbmeta,
+                                             **dbkwargs)
+    elif isinstance(dbref, str) and 'postgres' not in dbref:
+        raise NotImplementedError(
+            "viz-inspect currently doesn't support non-Postgres databases."
+        )
+    else:
+        engine, conn, meta = None, dbref, dbmeta
+        meta.bind = conn
+    #
+    # end of database get
+    #
+
+    # prepare the select
+    object_catalog = meta.tables['object_catalog']
+    object_images = meta.tables['object_images']
+    object_comments = meta.tables['object_comments']
+
+    join = object_catalog.join(object_images).outerjoin(object_comments)
+
+    if allinfo:
+
+        sel = select(
+            [object_catalog.c.objectid,
+             object_catalog.c.ra,
+             object_catalog.c.dec,
+             object_catalog.c.user_flags,
+             object_catalog.c.reviewer_userid,
+             object_catalog.c.extra_columns,
+             object_images.c.filepath,
+             object_comments.c.added,
+             object_comments.c.userid,
+             object_comments.c.user_flags,
+             object_comments.c.contents]
+        ).select_from(
+            join
+        )
 
     else:
+        sel = select([object_catalog.c.objectid]).select_from(join)
 
-        catalog.to_csv(catalog_fpath, index=indexcol, **pdkwargs)
+    # figure out the where condition
+    if review_status == 'unreviewed-all':
+        actual_sel = sel.where(object_comments.c.added == None)
+    elif review_status == 'reviewed-all':
+        actual_sel = sel.where(object_comments.c.added != None)
 
-        if isinstance(save_comments, pd.DataFrame):
+    elif review_status == 'reviewed-self' and userid is not None:
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid == userid
+        ).where(
+            object_comments.c.added != None
+        )
+    elif review_status == 'unreviewed-self' and userid is not None:
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid == userid
+        ).where(
+            object_comments.c.added == None
+        )
+    elif review_status == 'reviewed-other' and userid is not None:
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid != userid
+        ).where(
+            object_comments.c.added != None
+        )
+    elif review_status == 'unreviewed-other' and userid is not None:
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid != userid
+        ).where(
+            object_comments.c.added == None
+        )
+    else:
+        actual_sel = sel
 
-            # get the associated comments file
-            comment_csv_file = '{basename}-comments.csv'.format(
-                basename=os.path.splitext(os.path.basename(catalog_fpath))[0]
-            )
-            comment_csv_fpath = os.path.join(os.path.dirname(catalog_fpath),
-                                             comment_csv_file)
+    # add in the pagination
+    paged_sel = actual_sel.where(
+        object_catalog.c.id >= start_keyid
+    ).where(
+        object_catalog.c.id <= end_keyid
+    )
+
+    with conn.begin():
+
+        res = conn.execute(paged_sel)
+        rows = res.fetchall()
+
+    # close everything down if we were passed a database URL only and had to
+    # make a new engine
+    if engine:
+        conn.close()
+        meta.bind = None
+        engine.dispose()
+
+    return rows, start_keyid, end_keyid
 
 
-            save_comments.to_csv(comment_csv_fpath,
-                                 index=indexcol,
-                                 **pdkwargs)
 
-            return catalog_fpath, comment_csv_fpath
+def export_all_objects(outfile,
+                       dbinfo,
+                       dbkwargs=None):
 
-        else:
+    '''
+    This exports all of the objects to a CSV.
 
-            return catalog_fpath, None
+    '''
+
+
+######################
+## UPDATING OBJECTS ##
+######################
+
+def insert_object_comments(userid,
+                           comments,
+                           dbinfo,
+                           dbkwargs=None):
+    '''
+    This inserts a comment for the object.
+
+    Parameters
+    ----------
+
+    comments : dict
+        The content of the comments from the frontend. This is a dict of the
+        form::
+
+            {"objectid": int, the object ID for which the comments are intended,
+             "comment": str, the comment text,
+             "user_flags": dict, the flags set by the user and their value}
+
+    dbinfo : tuple
+        This is a tuple of two items:
+
+        - the database URL or the connection instance to use
+        - the database metadata object
+
+        If the database URL is provided, a new engine will be used. If the
+        connection itself is provided, it will be re-used.
+
+    dbkwargs : dict or None
+        A dict of kwargs to pass to the database open function.
+
+    Returns
+    -------
+
+    int
+        Returns the primary key id of the inserted comment.
+
+    '''
+
+    #
+    # get the database
+    #
+    dbref, dbmeta = dbinfo
+    if not dbkwargs:
+        dbkwargs = {}
+    if isinstance(dbref, str) and 'postgres' in dbref:
+        if not dbkwargs:
+            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
+        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
+            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
+        elif dbkwargs and 'engine_kwargs' in dbkwargs:
+            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
+        engine, conn, meta = get_postgres_db(dbref,
+                                             dbmeta,
+                                             **dbkwargs)
+    elif isinstance(dbref, str) and 'postgres' not in dbref:
+        raise NotImplementedError(
+            "viz-inspect currently doesn't support non-Postgres databases."
+        )
+    else:
+        engine, conn, meta = None, dbref, dbmeta
+        meta.bind = conn
+    #
+    # end of database get
+    #
+
+    # prepare the tables
+    object_comments = meta.tables['object_comments']
+
+    with conn.begin():
+        added = updated = datetime.now(tz=utc)
+
+        objectid = comments['objectid']
+        comment_text = comments['comment']
+        user_flags = comments['user_flags']
+
+        # prepare the insert
+        insert = pg.insert(
+            object_comments
+        ).values(
+            {'objectid':objectid,
+             'added':added,
+             'updated':updated,
+             'userid':userid,
+             'user_flags':user_flags,
+             'contents':comment_text}
+        )
+        conn.execute(insert)
+
+    # now look up the object and get all of its info
+    with conn.begin():
+        objectinfo = get_object(objectid, (conn, meta), dbkwargs)
+
+    # close everything down if we were passed a database URL only and had to
+    # make a new engine
+    if engine:
+        conn.close()
+        meta.bind = None
+        engine.dispose()
+
+    return objectinfo
+
+
+
+def update_object_flags(objectid,
+                        flags,
+                        dbinfo,
+                        dbkwargs=None):
+    '''
+    This updates an object's flags.
+
+    '''
+
+    #
+    # get the database
+    #
+    dbref, dbmeta = dbinfo
+    if not dbkwargs:
+        dbkwargs = {}
+    if isinstance(dbref, str) and 'postgres' in dbref:
+        if not dbkwargs:
+            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
+        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
+            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
+        elif dbkwargs and 'engine_kwargs' in dbkwargs:
+            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
+        engine, conn, meta = get_postgres_db(dbref,
+                                             dbmeta,
+                                             **dbkwargs)
+    elif isinstance(dbref, str) and 'postgres' not in dbref:
+        raise NotImplementedError(
+            "viz-inspect currently doesn't support non-Postgres databases."
+        )
+    else:
+        engine, conn, meta = None, dbref, dbmeta
+        meta.bind = conn
+    #
+    # end of database get
+    #
+
+    # prepare the tables
+    object_catalog = meta.tables['object_catalog']
+
+    upd = update(object_catalog).where(
+        object_catalog.c.objectid == objectid
+    ).values(
+        {'user_flags':flags}
+    )
+
+    with conn.begin():
+        conn.execute(upd)
+
+    # now look up the object and get all of its info
+    with conn.begin():
+        objectinfo = get_object(objectid, (conn, meta), dbkwargs)
+
+    # close everything down if we were passed a database URL only and had to
+    # make a new engine
+    if engine:
+        conn.close()
+        meta.bind = None
+        engine.dispose()
+
+    return objectinfo
