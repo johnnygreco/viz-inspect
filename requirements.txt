@@ -1,5 +1,6 @@
 numpy
 scipy
+pandas
 tornado>=5.1
 requests>=2.19.1
 markdown

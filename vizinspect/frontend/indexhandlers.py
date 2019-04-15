@@ -11,8 +11,6 @@ These are Tornado handlers for the index pages.
 ## SYSTEM IMPORTS ##
 ####################
 
-import os
-import os.path
 import logging
 import numpy as np
 from datetime import datetime
@@ -70,14 +68,8 @@ LOGGER = logging.getLogger(__name__)
 ## TORNADO IMPORTS ##
 #####################
 
-import tornado.ioloop
-import tornado.httpserver
-import tornado.web
-
-from tornado.escape import xhtml_escape
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
-import markdown
 
 
 ###################
@@ -132,6 +124,7 @@ class IndexHandler(BaseHandler):
 
 
 
+    @gen.coroutine
     def get(self):
         '''This handles GET requests to the index page.
 

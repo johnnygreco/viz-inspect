@@ -17,15 +17,214 @@
   </div>
 </div>
 
-
-<div class="container" >
+<!-- this checks if we're logged in. if we are, show the main interface. -->
+{% if current_user['user_role'] in ('authenticated','staff','superuser') %}
+<div class="container-fluid" >
   <div class="row" >
     <div class="col-12" >
-      Hello there!
+      Hello there, {{ current_user['email'] }}!
     </div>
   </div>
 </div>
 
+<!-- set the container width to window width.
+     remove -fluid below to wrap to ususal Bootstrap grid -->
+<div class="container-fluid">
+
+  <div class="row" >
+
+    <!-- this contains the main viewer and buttons -->
+    <div class="col-sm-12 col-md-9">
+
+      <!-- hscMap controls -->
+      <div class="row">
+        <div class="col-12 text-center" >
+          <button type="button" id="hsc-map-at-loc"
+                  class="btn btn-link">
+            hscMap at this location
+          </button>
+        </div>
+      </div>
+
+      <div class="row justify-content-between">
+
+        <div class="col-3 d-flex justify-content-start">
+
+          <button type="button"
+                  class="btn btn-outline-info"
+                  id="prev-object-link">
+            &larr; prev
+          </button>
+
+        </div>
+
+        <div class="col-6 d-flex justify-content-center" >
+
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text"
+                    id="current-index">Current source</span>
+            </div>
+            <input type="text"
+                   id="current-source-index"
+                   class="form-control"
+                   placeholder="current object source index"
+                   aria-label="source index" aria-describedby="current-index">
+            <div class="input-group-append">
+              <button class="btn btn-outline-success"
+                      type="button"
+                      id="jump-source-index">Jump</button>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="col-3 d-flex justify-content-end">
+
+          <button type="button"
+                  class="btn btn-outline-info"
+                  id="next-object-link">
+            next &rarr;
+          </button>
+
+        </div>
+
+      </div>
+
+      <!-- viewer row -->
+      <div class="row mt-2" >
+        <div class="d-flex col-sm-12 justify-content-center">
+
+          <img src="/viz-inspect-data/current-object-plot.png"
+               class="figure-img img-fluid"
+               id="galaxy-main-plot"
+               data-sourceindex="null"
+               data-ra="null"
+               data-dec="null"
+               alt="Galaxy image.">
+
+        </div>
+      </div>
+
+      <!-- this contains the info on the current object -->
+      <div class="row">
+        <div class="col-12" >
+          <table class="table table-sm" >
+            <thead>
+              <tr>
+                <th><code>object id</code></th>
+                <th><code>ra [deg]</code></th>
+                <th><code>dec [deg]</code></th>
+                <th><code>r_eff</code></th>
+                <th><code>mu_0(g)</code></th>
+                <th><code>g-i color</code></th>
+                <th><code>g-r color</code></th>
+                <th><code>class</code></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td id="current-objectid-val" >1</td>
+                <td id="current-ra-val" >30.0</td>
+                <td id="current-dec-val" >10.0</td>
+                <td id="current-reff-val" >1</td>
+                <td id="current-mug0-val" >2</td>
+                <td id="current-gicolor-val" >3</td>
+                <td id="current-grcolor-val" >4</td>
+                <td id="current-objectflag-val" >none</td>
+              </tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- control row -->
+      <div class="row" >
+        <div class="col-12" >
+          <div class="btn-toolbar justify-content-center"
+               role="toolbar" aria-label="Toolbar with button groups">
+
+            <div class="btn-group" role="group" aria-label="Second group">
+              <button type="button" class="btn btn-primary">yes</button>
+              <button type="button" class="btn btn-primary">no</button>
+              <button type="button" class="btn btn-primary">tidal</button>
+              <button type="button" class="btn btn-primary">unknown</button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- this contains the source index and notes -->
+      <div class="row mt-2" >
+        <div class="col-12" >
+          <form>
+            <div class="form-group">
+              <label for="object-notes">Notes on this object</label>
+              <textarea class="form-control" id="object-notes" rows="5"
+                        placeholder="Notes for this object go here. Markdown formatting is supported.">
+              </textarea>
+            </div>
+
+            <button type="submit" class="btn btn-success"
+                    id="save-current-object">
+              Save notes and classification
+            </button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- this contains all other user's comments -->
+    <div class="col-sm-12 col-md-3">
+      <h4>All users' comments</h4>
+
+      <div class="all-object-comments" >
+
+        <div class="card mt-3">
+          <div class="card-header">
+            Someone else (minutes ago)
+          </div>
+          <div class="card-body">
+            <p>Nil Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              posuere erat a ante.</p>
+          </div>
+        </div>
+
+        <div class="card mt-3">
+          <div class="card-header">
+            Someone (hours ago)
+          </div>
+          <div class="card-body">
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              posuere erat a ante.</p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- end of the main container -->
+</div>
+
+<!-- if we're not logged in, show the welcome message only -->
+{% else %}
+
+<div class="container" >
+  <div class="row" >
+    <div class="col-12" >
+      Hello there! Please <a href="/users/login" >login to continue</a>.
+    </div>
+  </div>
+</div>
+
+{% end %}
+
+
+<!-- end of page content -->
 {% end %}
 
 {% block pagejs_modules %}
