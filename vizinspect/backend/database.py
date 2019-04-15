@@ -36,7 +36,8 @@ VIZINSPECT = MetaData()
 Catalog = Table(
     'object_catalog',
     VIZINSPECT,
-    Column('objectid', Integer, primary_key=True, nullable=False),
+    Column('id', Integer, primary_key=True, nullable=False),
+    Column('objectid', Integer, nullable=False, index=True, unique=True),
     Column('added', TIMESTAMP(timezone=True),
            nullable=False,
            default=datetime.utcnow()),
@@ -46,18 +47,25 @@ Catalog = Table(
            default=datetime.utcnow()),
     Column('ra', Float, nullable=False),
     Column('dec', Float, nullable=False),
-    Column('mu_tot_forced_g', Float, nullable=True),
-    Column('m_tot', Float, nullable=True),
-    Column('A_g', Float, nullable=True),
-    Column('A_i', Float, nullable=True),
-    Column('mu_0_forced_g', Float, nullable=True),
-    Column('n', Float, nullable=True),
-    Column('ell', Float, nullable=True),
-    Column('r_e', Float, nullable=True),
-    Column('mu_ave_forced_g', Float, nullable=True),
-    Column('gi_color', Float, nullable=True),
-    Column('gr_color', Float, nullable=True),
-    Column('flags',postgresql.JSONB),
+    Column('user_flags', postgresql.JSONB),
+    Column('reviewer_userid', Integer, index=True),
+    Column('extra_columns', postgresql.JSONB),
+)
+
+Catalog = Table(
+    'object_images',
+    VIZINSPECT,
+    Column('imageid', Integer, primary_key=True, nullable=False),
+    Column('objectid', Integer, ForeignKey('object_catalog.objectid'),
+           nullable=False, index=True),
+    Column('added', TIMESTAMP(timezone=True),
+           nullable=False, index=True,
+           default=datetime.utcnow()),
+    Column('updated', TIMESTAMP(timezone=True),
+           nullable=False, index=True,
+           onupdate=datetime.utcnow(),
+           default=datetime.utcnow()),
+    Column('filepath', Text, index=True, nullable=True),
 )
 
 
@@ -75,6 +83,8 @@ Comments = Table(
     Column('objectid', Integer, ForeignKey('object_catalog.objectid'),
            nullable=False, index=True),
     Column('userid', Integer, nullable=False, index=True),
+    # this is the per-user set flags
+    Column('user_flags',postgresql.JSONB),
     Column('contents', Text),
 )
 
@@ -89,6 +99,7 @@ Comments = Table(
 # - datetime
 import json
 import numpy as np
+from sqlalchemy.engine.result import RowProxy
 
 
 class DatabaseJSONEncoder(json.JSONEncoder):
@@ -110,6 +121,8 @@ class DatabaseJSONEncoder(json.JSONEncoder):
             return int(obj)
         elif isinstance(obj, (np.float32, np.float64)):
             return float(obj)
+        elif isinstance(obj, RowProxy):
+            return tuple(obj)
         else:
             return json.JSONEncoder.default(self, obj)
 
