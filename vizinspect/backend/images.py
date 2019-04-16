@@ -38,6 +38,7 @@ LOGEXCEPTION = LOGGER.exception
 
 import os.path
 
+import numpy as np
 
 import matplotlib
 matplotlib.use('Agg')
@@ -46,13 +47,14 @@ matplotlib.rcParams['mathtext.fontset'] = 'cm'
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 
+from .catalogs import get_object, get_objects
 
 
 ###########################
 ## LOADING GALAXY IMAGES ##
 ###########################
 
-def load_galaxy_image(object_index, basedir, images_subdir='images'):
+def load_galaxy_image(image_file):
     '''This loads a Galaxy image from a PNG into an array readable by matplotlib.
 
     Parameters
@@ -76,16 +78,12 @@ def load_galaxy_image(object_index, basedir, images_subdir='images'):
 
     '''
 
-    image_fpath = os.path.join(basedir,
-                               images_subdir,
-                               'candy-{}.png'.format(object_index))
-
     try:
-        image = mpimg.imread(image_fpath)
+        image = mpimg.imread(image_file)
         return image
 
     except Exception as e:
-        LOGEXCEPTION('could not load the requested image: %s' % image_fpath)
+        LOGEXCEPTION('could not load the requested image: %s' % image_file)
         return None
 
 
@@ -94,13 +92,16 @@ def load_galaxy_image(object_index, basedir, images_subdir='images'):
 ## MAKING PLOTS ##
 ##################
 
-def make_main_plot(catalog,
-                   source_index,
-                   basedir,
-                   plot_fontsize=15,
-                   images_subdir='images',
-                   site_datadir='viz-inspect-data',
-                   outfile=None):
+def make_main_plot(
+        objectid,
+        dbinfo,
+        outdir,
+        plot_fontsize=15,
+        color_plot_xlim=None,
+        color_plot_ylim=None,
+        reff_plot_xlim=None,
+        reff_plot_ylim=None,
+):
     '''This generates the main plot.
 
     Parameters
@@ -141,6 +142,21 @@ def make_main_plot(catalog,
 
     '''
 
+    # get this object's info
+    this_object = get_object(objectid, dbinfo)
+
+    if not this_object or len(this_object) == 0:
+        LOGERROR("No information found for objectid: %s" % objectid)
+        return None
+
+    this_gi_color = this_object[0]['extra_columns']['g-i']
+    this_gr_color = this_object[0]['extra_columns']['g-r']
+    this_r_e = this_object[0]['extra_columns']['r_e']
+    this_mu_e_ave_forced_g = (
+        this_object[0]['extra_columns']['mu_e_ave_forced_g']
+    )
+    this_object_image = this_object[0]['filepath']
+
     plot_fontsize = 15
     fig = plt.figure(figsize=(10, 6))
     adjust = dict(wspace=0.13,
@@ -156,37 +172,58 @@ def make_main_plot(catalog,
     ax_bot = fig.add_subplot(grid[1,2])
 
     # add in the image of the object
-    img = load_galaxy_image(source_index,
-                            basedir,
-                            images_subdir=images_subdir)
+    img = load_galaxy_image(this_object_image)
 
-    # FIXME: check if the image's origin really is 0,0 in the bottom-left. If
-    # not, can remove origin kwarg below.
-    ax_img.imshow(img)
+    if img is not None:
 
-    # make the color plot
+        # FIXME: check if the image's origin really is 0,0 in the
+        # bottom-left. If not, can remove origin kwarg below.
+        ax_img.imshow(img)
+
+    # get the info from the database
+    full_catalog, start_keyid, end_keyid = (
+        get_objects(dbinfo, allinfo=True, end_keyid=None)
+    )
+
+    gi_color = np.array([x['extra_columns']['g-i'] for x in full_catalog])
+    gr_color = np.array([x['extra_columns']['g-r'] for x in full_catalog])
+    r_e = np.array([x['extra_columns']['r_e'] for x in full_catalog])
+    mu_e_ave_forced_g = np.array([
+        x['extra_columns']['mu_e_ave_forced_g'] for x in full_catalog
+    ])
+
+
+    # make the color plot for all of the objects
     ax_top.scatter(
-        catalog['g-i'],
-        catalog['g-r'],
+        gi_color,
+        gr_color,
         alpha=0.3,
         rasterized=True
     )
     ax_top.set_xlabel('$g-i$', fontsize=plot_fontsize)
     ax_top.set_ylabel('$g-r$', fontsize=plot_fontsize)
-    ax_top.set_xlim(catalog['g-i'].min()-0.1,
-                    catalog['g-i'].max()+0.1)
-    ax_top.set_ylim(catalog['g-r'].min()-0.1,
-                    catalog['g-r'].max()+0.1)
 
-    # overplot this object as a star
-    ax_top.scatter(catalog.loc[source_index,'g-i'],
-                   catalog.loc[source_index,'g-r'],
+    if color_plot_xlim is not None:
+        ax_top.set_xlim(color_plot_xlim)
+    else:
+        ax_top.set_xlim(gi_color.min()-0.2,
+                        gi_color.max()+0.2)
+
+    if color_plot_ylim is not None:
+        ax_top.set_ylim(color_plot_ylim)
+    else:
+        ax_top.set_ylim(gr_color.min()-0.2,
+                        gr_color.max()+0.2)
+
+    # overplot the current object as a star
+    ax_top.scatter(this_gi_color,
+                   this_gr_color,
                    c='k', s=300, marker='*', edgecolor='k')
 
     # make the half-light radius and surface-brightness plot
     ax_bot.scatter(
-        catalog['r_e'],
-        catalog.mu_e_ave_forced_g,
+        r_e,
+        mu_e_ave_forced_g,
         alpha=0.3
     )
     ax_bot.set_xlabel(
@@ -195,19 +232,28 @@ def make_main_plot(catalog,
     ax_bot.set_ylabel(
         r'$\langle\mu_e(g)\rangle\ \mathrm{[mag/arcsec^2]}$',
         fontsize=plot_fontsize)
-    ax_bot.set_xlim(0, 16)
-    ax_bot.set_ylim(24, 29)
+
+    if reff_plot_xlim is not None:
+        ax_bot.set_xlim(reff_plot_xlim)
+    else:
+        ax_bot.set_xlim(0,20)
+
+    if reff_plot_ylim is not None:
+        ax_bot.set_ylim(reff_plot_ylim)
+    else:
+        ax_bot.set_ylim(20,30)
 
     # overplot this object as a star
-    ax_bot.scatter(catalog.loc[source_index,'r_e'],
-                   catalog.loc[source_index,'mu_e_ave_forced_g'],
+    ax_bot.scatter(this_r_e,
+                   this_mu_e_ave_forced_g,
                    c='k', s=300, marker='*', edgecolor='k')
 
-    if outfile is None:
-
-        outfile = os.path.join(basedir,
-                               site_datadir,
-                               'current-object-plot.png')
+    outfile = os.path.join(
+        outdir,
+        'plot-objectid-{objectid}.png'.format(
+            objectid=objectid
+        )
+    )
 
     fig.savefig(outfile,dpi=100)
     plt.close('all')
