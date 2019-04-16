@@ -318,10 +318,10 @@ def get_object(objectid,
          object_catalog.c.reviewer_userid,
          object_catalog.c.extra_columns,
          object_images.c.filepath,
-         object_comments.c.added,
-         object_comments.c.userid,
-         object_comments.c.user_flags,
-         object_comments.c.contents]
+         object_comments.c.added.label("comment_added_on"),
+         object_comments.c.userid.label("comment_by_userid"),
+         object_comments.c.user_flags.label("comment_userset_flags"),
+         object_comments.c.contents.label("comment_text")]
     ).select_from(
         join
     ).where(
@@ -331,7 +331,7 @@ def get_object(objectid,
     with conn.begin():
 
         res = conn.execute(sel)
-        rows = res.fetchall()
+        rows = [{column: value for column, value in row.items()} for row in res]
 
     # close everything down if we were passed a database URL only and had to
     # make a new engine
@@ -443,10 +443,10 @@ def get_objects(
              object_catalog.c.reviewer_userid,
              object_catalog.c.extra_columns,
              object_images.c.filepath,
-             object_comments.c.added,
-             object_comments.c.userid,
-             object_comments.c.user_flags,
-             object_comments.c.contents]
+             object_comments.c.added.label("comment_added_on"),
+             object_comments.c.userid.label("comment_by_userid"),
+             object_comments.c.user_flags.label("comment_userset_flags"),
+             object_comments.c.contents.label("comment_text")]
         ).select_from(
             join
         )
@@ -488,16 +488,28 @@ def get_objects(
         actual_sel = sel
 
     # add in the pagination
-    paged_sel = actual_sel.where(
-        object_catalog.c.id >= start_keyid
-    ).where(
-        object_catalog.c.id <= end_keyid
-    )
+    if start_keyid is not None and end_keyid is not None:
+        paged_sel = actual_sel.where(
+            object_catalog.c.id >= start_keyid
+        ).where(
+            object_catalog.c.id <= end_keyid
+        )
+    elif start_keyid is not None and end_keyid is None:
+        paged_sel = actual_sel.where(
+            object_catalog.c.id >= start_keyid
+        )
+    elif end_keyid is not None and start_keyid is None:
+        paged_sel = actual_sel.where(
+            object_catalog.c.id <= end_keyid
+        )
+    else:
+        paged_sel = actual_sel
+
 
     with conn.begin():
 
         res = conn.execute(paged_sel)
-        rows = res.fetchall()
+        rows = [{column: value for column, value in row.items()} for row in res]
 
     # close everything down if we were passed a database URL only and had to
     # make a new engine
@@ -534,6 +546,9 @@ def insert_object_comments(userid,
     Parameters
     ----------
 
+    userid : int
+        The userid of the user making the comment.
+
     comments : dict
         The content of the comments from the frontend. This is a dict of the
         form::
@@ -557,8 +572,8 @@ def insert_object_comments(userid,
     Returns
     -------
 
-    int
-        Returns the primary key id of the inserted comment.
+    dict
+        Returns all of the object's info as a dict.
 
     '''
 
@@ -633,6 +648,34 @@ def update_object_flags(objectid,
                         dbkwargs=None):
     '''
     This updates an object's flags.
+
+    Parameters
+    ----------
+
+    objectid : int
+        The objectid of the object being updated.
+
+    flags : dict
+        The flags from the frontend as a dict with keys = the names of the flags
+        and the values as booleans representing if the flag is set or None.
+
+    dbinfo : tuple
+        This is a tuple of two items:
+
+        - the database URL or the connection instance to use
+        - the database metadata object
+
+        If the database URL is provided, a new engine will be used. If the
+        connection itself is provided, it will be re-used.
+
+    dbkwargs : dict or None
+        A dict of kwargs to pass to the database open function.
+
+    Returns
+    -------
+
+    dict
+        Returns all of the object's info as a dict.
 
     '''
 
