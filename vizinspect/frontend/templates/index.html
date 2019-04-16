@@ -212,7 +212,7 @@
 
           <div class="all-object-comments" >
 
-            <div class="card mt-3">
+            <div class="card mb-3 mx-1">
               <div class="card-header">
                 Someone else (minutes ago)
               </div>
@@ -222,7 +222,7 @@
               </div>
             </div>
 
-            <div class="card mt-3">
+            <div class="card mb-3 mx-1">
               <div class="card-header">
                 Someone (hours ago)
               </div>
@@ -288,9 +288,13 @@
     // load the user prefs
     ui.load_cookie_prefs('main-page');
 
+    {% if current_user['user_role'] in ('authenticated','staff','superuser') %}
+
     // fire the main handler
     review.get_object_list('all',0,'none',true);
 
-  });
+    {% end %}
+
+    });
 </script>
 {% end %}
