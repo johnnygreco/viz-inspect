@@ -303,3 +303,15 @@ footer a:hover, footer a:focus {
 footer img {
   max-width: 180px;
 }
+
+#all-object-list {
+  height: 25em;
+  overflow-y: auto;
+  font-size: small;
+}
+
+.all-object-comments {
+  height: 22em;
+  overflow-y: auto;
+  font-size: small;
+}

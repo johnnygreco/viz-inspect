@@ -373,6 +373,15 @@ var ui = {
 
     });
 
+    $('#objectid-list').on('click','.objectid-link', function (evt) {
+
+      evt.preventDefault();
+
+      let this_objectid = $(this).attr('data-objectid');
+      review.get_object(this_objectid);
+
+    });
+
 
     //////////////////////////
     // FORM SUBMIT BINDINGS //
@@ -426,7 +435,13 @@ var review = {
         review.objectlist_end_keyid = result.start_keyid;
 
         // TODO: update the object list controls with the object IDs
+        for (let objectid of review.objectlist) {
 
+          let this_elem =
+              `<li><a href="#" class="objectid-link" data-objectid="${objectid}">${objectid}</a></li>`;
+          $('#objectid-list').append(this_elem);
+
+        }
 
       }
 

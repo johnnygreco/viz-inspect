@@ -19,13 +19,6 @@
 
 <!-- this checks if we're logged in. if we are, show the main interface. -->
 {% if current_user['user_role'] in ('authenticated','staff','superuser') %}
-<div class="container-fluid" >
-  <div class="row" >
-    <div class="col-12" >
-      Hello there, {{ current_user['email'] }}!
-    </div>
-  </div>
-</div>
 
 <!-- set the container width to window width.
      remove -fluid below to wrap to ususal Bootstrap grid -->
@@ -174,7 +167,7 @@
       </div>
 
       <!-- control row -->
-      <div class="row" >
+      <div class="row mt-2" >
         <div class="col-12" >
 
           <h4>
@@ -211,31 +204,51 @@
 
     <!-- this contains all other user's comments -->
     <div class="col-sm-12 col-md-3">
-      <h4>All users' comments</h4>
 
-      <div class="all-object-comments" >
+      <div class="row">
+        <div class="col-12">
 
-        <div class="card mt-3">
-          <div class="card-header">
-            Someone else (minutes ago)
-          </div>
-          <div class="card-body">
-            <p>Nil Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
-              posuere erat a ante.</p>
+          <h4>Comments on this object</h4>
+
+          <div class="all-object-comments" >
+
+            <div class="card mt-3">
+              <div class="card-header">
+                Someone else (minutes ago)
+              </div>
+              <div class="card-body">
+                <p>Nil Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+                  posuere erat a ante.</p>
+              </div>
+            </div>
+
+            <div class="card mt-3">
+              <div class="card-header">
+                Someone (hours ago)
+              </div>
+              <div class="card-body">
+                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+                  posuere erat a ante.</p>
+              </div>
+            </div>
+
           </div>
         </div>
-
-        <div class="card mt-3">
-          <div class="card-header">
-            Someone (hours ago)
-          </div>
-          <div class="card-body">
-            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
-              posuere erat a ante.</p>
-          </div>
-        </div>
-
       </div>
+
+      <div class="row mt-4">
+        <div class="col-12">
+
+          <h4>List of all objects</h4>
+
+          <div id="all-object-list" >
+            <ul class="list-unstyled" id="objectid-list">
+            </ul>
+          </div>
+
+        </div>
+      </div>
+
 
     </div>
 
@@ -276,7 +289,7 @@
     ui.load_cookie_prefs('main-page');
 
     // fire the main handler
-    review.get_object_list('all',0,50,true);
+    review.get_object_list('all',0,'none',true);
 
   });
 </script>
