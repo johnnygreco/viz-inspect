@@ -60,14 +60,8 @@ def load_galaxy_image(image_file):
     Parameters
     ----------
 
-    object_index: int
-        The current object's source index in the input catalog.
-
-    basedir : str
-        The base directory that the viz-inspect server is working in.
-
-    images_subdir : str
-        The subdirectory under the `basedir` containing all of the images.
+    image_file : str
+        The name of the file to load.
 
     Returns
     -------
@@ -107,38 +101,41 @@ def make_main_plot(
     Parameters
     ----------
 
-    catalog : pandas.DataFrame
-        This is the catalog of objects loaded into a pandas dataframe.
+    objectid : int
+        The objectid of the object to make the plot for.
 
-    source_index : int
-        The index of the object to make a plot for.
+    dbinfo : tuple
+        This is a tuple of two items:
 
-    basedir : str
-        The base directory where the viz-inspect server is operating.
+        - the database URL or the connection instance to use
+        - the database metadata object
+
+        If the database URL is provided, a new engine will be used. If the
+        connection itself is provided, it will be re-used.
+
+    outdir : str
+        The directory where the plot file will be written.
 
     plot_fontsize: int
         The font-size of the plot to make in points.
 
-    images_subdir : str
-        The subdirectory under the `basedir` where the object images are
-        located.
+    color_plot_xlim : tuple of two ints or None
+        This sets the xlim of the color-color plot.
 
-    site_datadir : str
-        The subdirectory under the `basedir` where the images to serve to the
-        frontend will be placed.
+    color_plot_ylim : tuple of two ints or None
+        This sets the ylim of the color-color plot.
 
-    outfile : str or None
-        The output PNG file name where the plot will be written to. If this is
-        None, the plot will be written to a file called
-        'current-object-plot.png' in the site-static directory so the
-        viz-inspect server can load it into the interface. If this is a str,
-        should be a path indicating where the output plot file will be written.
+    reff_plot_xlim : tuple of two ints or None
+        This sets the xlim of the reff-mu plot.
+
+    reff_plot_ylim : tuple of two ints or None
+        This sets the ylim of the reff-mu plot.
 
     Returns
     -------
 
     str
-        The path where the plot was written to.
+        The path of the file where the plot was written to.
 
     '''
 
