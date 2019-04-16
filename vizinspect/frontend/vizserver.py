@@ -23,10 +23,8 @@ import time
 import sys
 import socket
 import json
+import multiprocessing as mp
 from datetime import datetime
-
-# this handles async background stuff
-from concurrent.futures import ProcessPoolExecutor
 
 # setup signal trapping on SIGINT
 def recv_sigint(signum, stack):
@@ -57,7 +55,6 @@ import tornado.httpserver
 import tornado.web
 import tornado.options
 from tornado.options import define, options
-
 
 ###############################
 ### APPLICATION SETUP BELOW ###
@@ -124,19 +121,80 @@ define('sessionexpiry',
        type=int)
 
 
+###########################
+## DATABASE AND CATALOGS ##
+###########################
+
+define('catalogcsv',
+       default=None,
+       help=("This tells the server to load the provided catalog into the DB."),
+       type=str)
+
+define('imagedir',
+       default=None,
+       help=("This tells the server where the HUGS images are."),
+       type=str)
+
+define('flagkeys',
+       default='candy,junk,cirrus,unknown',
+       help=("This tells the server what object flags to use for the catalog."),
+       type=str)
+
+
 
 ###########
 ## UTILS ##
 ###########
 
-def setup_worker():
+def setup_worker(database_url):
     '''This sets up the workers to ignore the INT signal, which is handled by
     the main process.
 
+    Also sets up the backend database instance.
+
     '''
+
+    from ..backend import database
+
     # unregister interrupt signals so they don't get to the worker
     # and the executor can kill them cleanly (hopefully)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+    # set up the database
+    currproc = mp.current_process()
+
+    # sets up the engine, connection, and metadata objects as process-local
+    # variables
+    currproc.engine, currproc.connection, currproc.metadata = (
+        database.get_vizinspect_db(
+            database_url,
+            database.VIZINSPECT
+        )
+    )
+
+
+
+def close_database():
+
+    '''This is used to close the database when the worker loop
+    exits.
+
+    '''
+
+    currproc = mp.current_process()
+    if getattr(currproc, 'metadata', None):
+        del currproc.metadata
+
+    if getattr(currproc, 'connection', None):
+        currproc.connection.close()
+        del currproc.connection
+
+    if getattr(currproc, 'engine', None):
+        currproc.engine.dispose()
+        del currproc.engine
+
+    print('Shutting down database engine in process: %s' % currproc.name,
+          file=sys.stdout)
 
 
 
@@ -211,42 +269,108 @@ def main():
                                          '.first_start_done')
     first_start_done = os.path.exists(first_start_done_file)
 
+    # on the first start, the server should ask for a catalog CSV and the flag
+    # values
     if not first_start_done:
+
         import shutil
 
         # copy over the site-info.json file
-        shutil.copy(os.path.abspath(os.path.join(os.path.dirname(__file__),
-                                                 '..',
-                                                 'data',
-                                                 'site-info.json')),
-                    os.path.abspath(options.basedir))
+        try:
+            shutil.copy(os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                                     '..',
+                                                     'data',
+                                                     'site-info.json')),
+                        os.path.abspath(options.basedir))
+        except FileExistsError as e:
+            LOGGER.warning("site-info.json already exists "
+                           "in the basedir. Not overwriting.")
 
         # copy over the email-server.json file
-        shutil.copy(os.path.abspath(os.path.join(os.path.dirname(__file__),
-                                                 '..',
-                                                 'data',
-                                                 'email-server.json')),
-                    os.path.abspath(options.basedir))
+        try:
+            shutil.copy(os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                                     '..',
+                                                     'data',
+                                                     'email-server.json')),
+                        os.path.abspath(options.basedir))
+        except FileExistsError as e:
+            LOGGER.warning("email-server.json already exists "
+                           "in the basedir. Not overwriting.")
 
         # make a default data directory
-        os.makedirs(os.path.join(options.basedir,'viz-inspect-data'))
+        try:
+            os.makedirs(os.path.join(options.basedir,'viz-inspect-data'))
+        except FileExistsError as e:
+            LOGGER.warning("The output plot PNG directory already "
+                           "exists in the basedir. Not overwriting.")
 
-        # copy over the test-catalog.csv file
-        shutil.copy(os.path.abspath(os.path.join(os.path.dirname(__file__),
-                                                 '..',
-                                                 'data',
-                                                 'test-catalog.csv')),
-                    os.path.abspath(options.basedir))
+        #
+        # now, get site specific info
+        #
+        siteinfojson = os.path.join(BASEDIR, 'site-info.json')
+        with open(siteinfojson,'r') as infd:
+            SITEINFO = json.load(infd)
+
+        # 1. check if the --catalogcsv arg is present
+        if (options.catalogcsv is not None and
+            os.path.exists(options.catalogcsv)):
+
+            LOGGER.info(
+                "Doing first time setup. "
+                "Loading provided catalog: %s into DB at %s" %
+                (options.catalogcsv,
+                 SITEINFO['database_url'])
+            )
+            catalog_path = options.catalogcsv
+
+        else:
+
+            LOGGER.info("First time setup requires a catalog CSV to load.")
+            catalog_path = input("Catalog CSV location: ")
 
 
-        # copy over the test plot PNG
-        shutil.copy(os.path.abspath(os.path.join(os.path.dirname(__file__),
-                                                 '..',
-                                                 'data',
-                                                 'test-object-plot.png')),
-                    os.path.join(options.basedir,'viz-inspect-data'))
+        # 2. check if the --imagedir arg is present
+        if (options.imagedir is not None and
+            os.path.exists(options.imagedir)):
+
+            LOGGER.info(
+                "Using dir: %s as the location of the HUGS images." %
+                (options.imagedir,)
+            )
+            image_dir = options.imagedir
+
+        else:
+
+            LOGGER.info("First time setup requires an "
+                        "image directory to load HUGS images from.")
+            image_dir = input("HUGS image directory location: ")
 
 
+        # now we have the catalog CSV and image dir
+        # load the objects into the DB
+        from ..backend import database, catalogs
+        try:
+            database.new_vizinspect_db(SITEINFO['database_url'],
+                                       database.VIZINSPECT)
+        except Exception as e:
+            LOGGER.warning("The required tables already exist. "
+                           "Will add this catalog to them.")
+
+        LOGGER.info("Loading objects. Using provided flag keys: %s" %
+                    options.flagkeys)
+        loaded = catalogs.load_catalog(
+            catalog_path,
+            image_dir,
+            (SITEINFO['database_url'],
+             database.VIZINSPECT),
+            flags_to_use=options.flagkeys.split(','))
+
+        if loaded:
+            LOGGER.info("Objects loaded into catalog successfully.")
+
+        #
+        # end of first time setup
+        #
         # set the first start done flag
         with open(first_start_done_file,'w') as outfd:
             outfd.write('server set up in this directory on %s UTC\n' %
@@ -364,7 +488,8 @@ def main():
     #
     EXECUTOR = ProcExecutor(max_workers=MAXWORKERS,
                             initializer=setup_worker,
-                            initargs=())
+                            initargs=(SITEINFO['database_url'],),
+                            finalizer=close_database)
 
 
     ##################
