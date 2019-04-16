@@ -238,8 +238,30 @@
 
       <div class="row mt-4">
         <div class="col-12">
-
           <h4>List of all objects</h4>
+
+          <form>
+            <div class="form-group">
+              <label class="form-label" for="objectlist-pref-select">
+                Types of objects to show
+              </label>
+              <select class="custom-select" id="objectlist-pref-select">
+                <option val="all">All objects</option>
+                <option val="reviewed-all">All reviewed objects</option>
+                <option val="unreviewed-all">All unreviewed objects</option>
+                <option val="reviewed-self">Only objects reviewed by me</option>
+                <option val="unreviewed-self">Only objects not reviewed by me</option>
+                <option val="reviewed-other">Only objects reviewed by others</option>
+                <option val="unreviewed-other">Only objects not reviewed by others</option>
+              </select>
+            </div>
+          </form>
+
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-12">
 
           <div id="all-object-list" >
             <ul class="list-unstyled" id="objectid-list">
