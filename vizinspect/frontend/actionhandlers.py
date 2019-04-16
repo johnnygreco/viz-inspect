@@ -101,10 +101,6 @@ def worker_get_object(objectid, basedir, userid):
     - these are kept around until the server exits
     - if a plot file exists, we don't try to make a new one
 
-    FIXME: this should load stuff read-only if the current object's
-    reviewer_userid doesn't match the current user's ID (e.g. they haven't
-    been assigned to review this object).
-
     '''
 
     try:
@@ -148,12 +144,24 @@ def worker_get_object(objectid, basedir, userid):
             )
             objectplot = os.path.abspath(made_plot)
 
+        # set the readonly flag
+        if (objectinfo_dict['reviewer_userid'] is not None and
+            userid == objectinfo_dict['reviewer_userid']):
+            readonly = False
+        elif (objectinfo_dict['reviewer_userid'] is not None and
+              userid != objectinfo_dict['reviewer_userid']):
+            readonly = True
+        elif (objectinfo_dict['reviewer_userid'] is None):
+            readonly = False
+        else:
+            readonly = True
 
         # this is the dict we return
         retdict = {
             'info': objectinfo_dict,
             'plot':os.path.basename(objectplot),
-            'comments':comments
+            'comments':comments,
+            'readonly':readonly
         }
 
         return retdict
@@ -172,6 +180,38 @@ def worker_get_objects(review_status='all',
     This returns the full object list.
 
     '''
+
+    try:
+
+        currproc = mp.current_process()
+        conn, meta = currproc.connection, currproc.metadata
+
+        # this returns a list of dicts {'objectid': <objectid>}
+        objectlist, ret_start_keyid, ret_end_keyid = catalogs.get_objects(
+            (conn, meta),
+            review_status=review_status,
+            userid=userid,
+            start_keyid=start_keyid,
+            end_keyid=end_keyid,
+            allinfo=allinfo
+        )
+
+        # reform to a single list
+        returned_objectlist = [x['objectid'] for x in objectlist]
+
+        # this is the dict we return
+        retdict = {
+            'objectlist': returned_objectlist,
+            'start_keyid':ret_start_keyid,
+            'end_keyid':ret_end_keyid,
+        }
+
+        return retdict
+
+    except Exception as e:
+        LOGGER.exception("Could not get object list.")
+        return None
+
 
 
 def worker_insert_object_comments(
@@ -253,7 +293,7 @@ class ObjectListHandler(BaseHandler):
 
 
     @gen.coroutine
-    def get(self, objectid):
+    def get(self):
         '''This handles GET requests to the /api/list-objects endpoint.
 
         Parameters
@@ -279,11 +319,74 @@ class ObjectListHandler(BaseHandler):
         end_keyid : int, optional, default = 50
             The last object keyid to retrieve. Useful for pagination.
 
-        allinfo : int, {0,1}, default = 0
-            If 1, then all object information will be retrieved. If 0, only the
-            objectids will be retrieved.
-
         '''
+
+        # check if we're actually logged in
+        if not self.current_user:
+            retdict = {'status':'failed',
+                       'message':'You must be logged in to view objects.',
+                       'result': None}
+            self.set_status(401)
+            self.write(retdict)
+            raise web.Finish()
+
+        # if the current user is anonymous or locked, ignore their request
+        if self.current_user and self.current_user['user_role'] in ('anonymous',
+                                                                    'locked'):
+            retdict = {'status':'failed',
+                       'message':'You must be logged in to view objects.',
+                       'result': None}
+            self.set_status(401)
+            self.write(retdict)
+            raise web.Finish()
+
+        # otherwise, go ahead and process the request
+        try:
+
+            # parse the args
+            review_status = xhtml_escape(
+                self.get_argument('review_status','all')
+            )
+            start_keyid = xhtml_escape(self.get_argument('start_keyid', '0'))
+            end_keyid = xhtml_escape(self.get_argument('end_keyid', '50'))
+
+            start_keyid = int(start_keyid)
+            end_keyid = int(end_keyid)
+
+            objectlist_info = yield self.executor.submit(
+                worker_get_objects,
+                review_status=review_status,
+                userid=self.current_user['user_id'],
+                start_keyid=start_keyid,
+                end_keyid=end_keyid,
+                allinfo=False
+            )
+
+            if objectlist_info is not None:
+
+                retdict = {'status':'ok',
+                           'message':'objectlist OK',
+                           'result':objectlist_info}
+
+            else:
+
+                retdict = {'status':'failed',
+                           'message':"Unable to retrieve object list.",
+                           'result':None}
+                self.set_status(404)
+
+            self.write(retdict)
+            self.finish()
+
+        except Exception as e:
+
+            LOGGER.exception('Failed to retrieve the object list.')
+            self.set_status(400)
+            retdict = {'status':'failed',
+                       'message':'Invalid request for object list.',
+                       'result':None}
+            self.write(retdict)
+            self.finish()
 
 
 
@@ -331,10 +434,6 @@ class LoadObjectHandler(BaseHandler):
         Gets catalog and comment info, plots the object if not already plotted,
         and then returns JSON with everything.
 
-        FIXME: this should load stuff read-only if the current object's
-        reviewer_userid doesn't match the current user's ID (e.g. they haven't
-        been assigned to review this object).
-
         '''
 
         # check if we're actually logged in
@@ -346,6 +445,7 @@ class LoadObjectHandler(BaseHandler):
             self.write(retdict)
             raise web.Finish()
 
+        # if the current user is anonymous or locked, ignore their request
         if self.current_user and self.current_user['user_role'] in ('anonymous',
                                                                     'locked'):
             retdict = {'status':'failed',
@@ -355,6 +455,7 @@ class LoadObjectHandler(BaseHandler):
             self.write(retdict)
             raise web.Finish()
 
+        # otherwise, go ahead and process the request
         try:
 
             objindex = int(xhtml_escape(objectid))
@@ -364,8 +465,8 @@ class LoadObjectHandler(BaseHandler):
             objectinfo = yield self.executor.submit(
                 worker_get_object,
                 objindex,
-                self.current_user['user_id'],
                 self.basedir,
+                self.current_user['user_id'],
             )
 
             if objectinfo is not None:
@@ -375,6 +476,7 @@ class LoadObjectHandler(BaseHandler):
                            'result':objectinfo}
 
             else:
+
                 retdict = {'status':'failed',
                            'message':"Object with specified ID not found.",
                            'result':None}

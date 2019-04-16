@@ -162,6 +162,7 @@ def load_catalog(catalog_fpath,
     # the main columns
     main_cols = catalog[maincol_list].to_dict(orient='records')
     other_cols = catalog[othercol_list].to_dict(orient='records')
+
     now = datetime.now(tz=utc)
 
     for x,y in zip(main_cols, other_cols):
@@ -311,7 +312,8 @@ def get_object(objectid,
     join = object_catalog.join(object_images).outerjoin(object_comments)
 
     sel = select(
-        [object_catalog.c.objectid,
+        [object_catalog.c.id.label('keyid'),
+         object_catalog.c.objectid,
          object_catalog.c.ra,
          object_catalog.c.dec,
          object_catalog.c.user_flags,
@@ -436,7 +438,8 @@ def get_objects(
     if allinfo:
 
         sel = select(
-            [object_catalog.c.objectid,
+            [object_catalog.c.id.label('keyid'),
+             object_catalog.c.objectid,
              object_catalog.c.ra,
              object_catalog.c.dec,
              object_catalog.c.user_flags,

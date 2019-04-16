@@ -324,10 +324,59 @@ var ui = {
       ui.generate_new_apikey('#api-key','#apikey-expiry');
     });
 
+    //////////////////////
+    // CONTROL BINDINGS //
+    //////////////////////
 
-    /////////////////////////////////
-    // SEARCH FORM SUBMIT BINDINGS //
-    /////////////////////////////////
+    $('#next-object-link').on('click', function (evt) {
+
+      // find the previous object in the objectlist
+      let this_object_index = review.objectlist.indexOf(review.current_objectid);
+
+      // only move if the current object is not at the end of the list
+      if (this_object_index != (review.objectlist.length-1)) {
+
+        let next_objectid = review.objectlist[this_object_index+1];
+        review.get_object(next_objectid);
+
+      }
+
+    });
+
+    $('#prev-object-link').on('click', function (evt) {
+
+      // find the previous object in the objectlist
+      let this_object_index = review.objectlist.indexOf(review.current_objectid);
+
+      // only move if the current object is not at the start of the list
+      if ( (this_object_index != 0) ) {
+
+        let prev_objectid = review.objectlist[this_object_index-1];
+        review.get_object(prev_objectid);
+
+      }
+
+
+    });
+
+
+    $('#jump-source-index').on('click', function (evt) {
+
+      let jump_to = parseInt($('#current-source-index').val());
+
+      if (!isNaN(jump_to)) {
+
+        // fire the get object function
+        review.get_object(jump_to);
+
+      }
+
+    });
+
+
+    //////////////////////////
+    // FORM SUBMIT BINDINGS //
+    //////////////////////////
 
     // bind the form submit for the review
     $('#review-form').on('submit', function (event) {
@@ -347,6 +396,67 @@ var ui = {
 var review = {
 
   current_objectid: null,
+  current_keyid: null,
+  current_readonly: null,
+
+  objectlist: null,
+  objectlist_start_keyid: null,
+  objectlist_end_keyid: null,
+
+  // this fetches the full object list. if load_first_object is true, will load
+  // the first object in the list right after fetching the list
+  get_object_list: function (review_status,
+                             start_keyid,
+                             end_keyid,
+                             load_first_object) {
+
+    let url = `/api/list-objects?review_status=${review_status}&start_keyid=${start_keyid}&end_keyid=${end_keyid}`;
+
+    $.getJSON(url, function (data) {
+
+      let status = data.status;
+      let result = data.result;
+      let message = data.message;
+
+      // if all's good, set the current object list and update the page
+      if (status == 'ok') {
+
+        review.objectlist = result.objectlist;
+        review.objectlist_start_keyid = result.start_keyid;
+        review.objectlist_end_keyid = result.start_keyid;
+
+        // TODO: update the object list controls with the object IDs
+
+
+      }
+
+      // if we failed, alert the user
+      else {
+
+        ui.alert_box(message, "danger");
+
+      }
+
+
+
+    }).done(function (xhr) {
+
+      // get the first object if load_first_object is true
+      if (load_first_object === true) {
+
+        review.get_object(review.objectlist[0]);
+
+      }
+
+
+    }).fail( function (xhr) {
+
+      ui.alert_box("Could not load object list from the backend.", "danger");
+
+    });
+
+  },
+
 
   get_object: function (source_index) {
 
@@ -361,13 +471,89 @@ var review = {
 
       if (status == 'ok') {
 
-        // update the src of the image
-        $('#galaxy-main-plot').attr('src','/viz-inspect-data/' + result.plot);
+        let objectinfo = result.info;
+        let comments = result.comments;
+        let readonly = result.readonly;
+        let objectplot = result.plot;
 
-        // update the info for this object
+        // update the status
+        review.current_objectid = objectinfo.objectid;
+        review.current_keyid = objectinfo.keyid;
+        review.current_readonly = readonly;
+
+        // update the plot
+        $('#galaxy-main-plot').attr('src','/viz-inspect-data/' + objectplot);
+        $('#galaxy-main-plot').attr('data-sourceindex', objectinfo.objectid);
+        $('#galaxy-main-plot').attr('data-ra', objectinfo.ra);
+        $('#galaxy-main-plot').attr('data-dec', objectinfo.dec);
+
+        // update the objectid and keyid
+        $('#current-source-index').val(objectinfo.objectid);
+        $('#current-source-index').attr('data-keyid', objectinfo.keyid);
+
+        // update the main table
+        $('#current-objectid-val').html(objectinfo.objectid);
+        $('#current-ra-val').html(objectinfo.ra);
+        $('#current-dec-val').html(objectinfo.dec);
+        $('#current-reff-val').html(objectinfo.extra_columns['r_e']);
+        $('#current-mug0-val').html(
+          objectinfo.extra_columns['mu_e_ave_forced_g']
+        );
+        $('#current-gicolor-val').html(objectinfo.extra_columns['g-i']);
+        $('#current-grcolor-val').html(objectinfo.extra_columns['g-r']);
+
+        // clean out the extra info table
+        $('#extra-info-cols').empty();
+
+        // update the extra info table
+        for (let item in objectinfo.extra_columns) {
+          let thisrow = `<tr>
+<th>${item}</th><td>${objectinfo.extra_columns[item]}</td>
+</tr>`;
+          $('#extra-info-cols').append(thisrow);
+
+        }
+
+        // clean out the flag button group
+        $('#flag-checkbox-group').empty();
+
+        // update the flags button group
+        for (let item in objectinfo.user_flags) {
+
+          let checked = objectinfo.user_flags[item];
+          let checkbox_checked = '';
+          if (checked) {
+            checkbox_checked = 'checked';
+          }
+          let checkbox_disabled = '';
+          if (review.current_readonly) {
+            checkbox_disabled = 'disabled';
+            $('#flag-checkbox-group').append(
+              "<p>This object is not in your review " +
+                "assigment so it has been marked as <em>read-only</em>.</p>"
+            )
+          }
+
+          let thisrow = `
+<div class="custom-control custom-checkbox">
+  <input type="checkbox"
+         class="custom-control-input"
+         id="check-${item}" ${checkbox_checked} ${checkbox_disabled}>
+  <label class="custom-control-label" for="check-${item}">${item}</label>
+</div>`;
+          $('#flag-checkbox-group').append(thisrow);
+
+        }
+
+        // TODO: handle the notes form
+
+
+        // TODO: handle the object comments
 
 
       }
+
+      // if we couldn't load this object, show the error message.
       else {
         ui.alert_box(message, "danger");
       }
@@ -377,6 +563,7 @@ var review = {
     });
 
   },
+
 
   do_review: function (override_params) {
 

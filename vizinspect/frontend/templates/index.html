@@ -66,7 +66,7 @@
                     id="current-index">Current source</span>
             </div>
             <input type="text"
-                   id="current-source-index"
+                   id="current-source-index" data-keyid="0"
                    class="form-control"
                    placeholder="current object source index"
                    aria-label="source index" aria-describedby="current-index">
@@ -95,7 +95,7 @@
       <div class="row mt-2" >
         <div class="d-flex col-sm-12 justify-content-center">
 
-          <img src="/viz-inspect-data/current-object-plot.png"
+          <img src=""
                class="figure-img img-fluid"
                id="galaxy-main-plot"
                data-sourceindex="null"
@@ -119,7 +119,6 @@
                 <th><code>mu_0(g)</code></th>
                 <th><code>g-i color</code></th>
                 <th><code>g-r color</code></th>
-                <th><code>class</code></th>
               </tr>
             </thead>
             <tbody>
@@ -131,26 +130,61 @@
                 <td id="current-mug0-val" >2</td>
                 <td id="current-gicolor-val" >3</td>
                 <td id="current-grcolor-val" >4</td>
-                <td id="current-objectflag-val" >none</td>
               </tr>
+            </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- this contains the extra columns -->
+      <div class="row" >
+        <div class="col-12">
+
+          <div class="accordion" id="extrainfo-accordion">
+            <div class="card">
+              <div class="card-header" id="extrainfo-head">
+                <h2 class="mb-0">
+                  <button class="btn btn-link"
+                          type="button"
+                          data-toggle="collapse"
+                          data-target="#extrainfo-collapse"
+                          aria-expanded="false"
+                          aria-controls="extrainfo-collapse">
+                    All database information
+                  </button>
+                </h2>
+              </div>
+
+              <div id="extrainfo-collapse" class="collapse"
+                   aria-labelledby="extrainfo-head"
+                   data-parent="#extrainfo-accordion">
+
+                <div class="card-body">
+
+                  <table class="table table-sm" id="extra-info-cols" >
+                  </table>
+
+                </div>
+
+              </div>
+            </div>
+
+          </div>
         </div>
       </div>
 
       <!-- control row -->
       <div class="row" >
         <div class="col-12" >
-          <div class="btn-toolbar justify-content-center"
-               role="toolbar" aria-label="Toolbar with button groups">
 
-            <div class="btn-group" role="group" aria-label="Second group">
-              <button type="button" class="btn btn-primary">yes</button>
-              <button type="button" class="btn btn-primary">no</button>
-              <button type="button" class="btn btn-primary">tidal</button>
-              <button type="button" class="btn btn-primary">unknown</button>
-            </div>
+          <h4>
+            Object flags
+          </h4>
+
+          <div id="flag-checkbox-group">
 
           </div>
+
         </div>
       </div>
 
@@ -232,16 +266,18 @@
 
 
 {% block pagejs %}
+<script>
+  $(document).ready(function() {
 
-$(document).ready(function() {
+    // UI action setup
+    ui.action_setup();
 
-// UI action setup
-ui.action_setup();
+    // load the user prefs
+    ui.load_cookie_prefs('main-page');
 
-// load the user prefs
-ui.load_cookie_prefs('main-page');
+    // fire the main handler
+    review.get_object_list('all',0,50,true);
 
-
-});
-
+  });
+</script>
 {% end %}
