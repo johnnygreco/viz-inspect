@@ -226,9 +226,10 @@ def main():
     ## DEFINING URL HANDLERS ##
     ###########################
 
+    from ..authnzerver import authdb
     from . import auth_handlers as ah
     from . import indexhandlers as ih
-    from ..authnzerver import authdb
+    from . import actionhandlers as actions
 
 
     ###################
@@ -531,8 +532,47 @@ def main():
         ## ACTUAL WORK HANDLERS ##
         ##########################
 
-        # TODO: fill in here
+        (r'/list-objects',
+         actions.LoadObjectHandler,
+         {'currentdir':CURRENTDIR,
+          'templatepath':TEMPLATEPATH,
+          'assetpath':ASSETPATH,
+          'executor':EXECUTOR,
+          'basedir':BASEDIR,
+          'siteinfo':SITEINFO,
+          'authnzerver':AUTHNZERVER,
+          'session_expiry':SESSION_EXPIRY,
+          'fernetkey':FERNETSECRET,
+          'ratelimit':RATELIMIT,
+          'cachedir':CACHEDIR}),
 
+        (r'/load-object/(\d{1,10})',
+         actions.LoadObjectHandler,
+         {'currentdir':CURRENTDIR,
+          'templatepath':TEMPLATEPATH,
+          'assetpath':ASSETPATH,
+          'executor':EXECUTOR,
+          'basedir':BASEDIR,
+          'siteinfo':SITEINFO,
+          'authnzerver':AUTHNZERVER,
+          'session_expiry':SESSION_EXPIRY,
+          'fernetkey':FERNETSECRET,
+          'ratelimit':RATELIMIT,
+          'cachedir':CACHEDIR}),
+
+        (r'/save-object/(\d{1,10})/(comments|flags)',
+         actions.LoadObjectHandler,
+         {'currentdir':CURRENTDIR,
+          'templatepath':TEMPLATEPATH,
+          'assetpath':ASSETPATH,
+          'executor':EXECUTOR,
+          'basedir':BASEDIR,
+          'siteinfo':SITEINFO,
+          'authnzerver':AUTHNZERVER,
+          'session_expiry':SESSION_EXPIRY,
+          'fernetkey':FERNETSECRET,
+          'ratelimit':RATELIMIT,
+          'cachedir':CACHEDIR}),
 
         ########################
         ## AUTH RELATED PAGES ##

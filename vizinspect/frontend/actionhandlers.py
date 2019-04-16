@@ -14,8 +14,8 @@ These are Tornado handlers for the AJAX actions.
 import logging
 import numpy as np
 from datetime import datetime
-
 import os.path
+import multiprocessing as mp
 
 # for generating encrypted token information
 from cryptography.fernet import Fernet
@@ -88,17 +88,7 @@ from ..backend import catalogs, images
 ## WORKER FUNCTIONS ##
 ######################
 
-def _load_object_from_catalog(
-        catalog_csv,
-        source_index,
-        basedir,
-        review_mode=False,
-        flags_to_use=('candy','junk','tidal','cirrus'),
-        load_comments=True,
-        plot_fontsize=15,
-        images_subdir='images',
-        site_datadir='viz-inspect-data',
-):
+def worker_get_object(objectid, basedir):
     '''
     This does the actual work of loading the object.
 
@@ -113,71 +103,184 @@ def _load_object_from_catalog(
 
     '''
 
-    cat, comm = catalogs.load_catalog(catalog_csv,
-                                      review_mode=review_mode,
-                                      flags_to_use=flags_to_use,
-                                      load_comments=load_comments)
+    try:
 
-    if source_index > len(cat):
-        LOGGER.error(
-            'source index requested: %s is > len(catalog) = %s' % (
-                source_index,
-                len(cat)
+        currproc = mp.current_process()
+        conn, meta = currproc.connection, currproc.metadata
+
+        # this returns a list of objectinfo rows
+        # one row per entry in the comments table for this object
+        # we'll reform everything to a single dict suitable for JSON output
+        # and turn the comments into a row of dicts per commenter
+        objectinfo = catalogs.get_object(objectid,
+                                         (conn, meta))
+
+        comments = [{'comment_added_on':x['comment_added_on'],
+                     'comment_by_userid':x['comment_by_userid'],
+                     'comment_userset_flags':x['comment_userset_flags'],
+                     'comment_text':x['comment_text']} for x in objectinfo]
+
+        objectinfo_dict = objectinfo[0]
+        del objectinfo_dict['comment_added_on']
+        del objectinfo_dict['comment_by_userid']
+        del objectinfo_dict['comment_userset_flags']
+        del objectinfo_dict['comment_text']
+
+        # get the plot if it exists
+        objectplot = os.path.abspath(
+            os.path.join(
+                basedir,
+                'viz-inspect-data',
+                'plot-objectid-{objectid}.png'.format(objectid=objectid)
             )
         )
+
+        if not os.path.exists(objectplot):
+            made_plot = images.make_main_plot(
+                objectid,
+                (conn, meta),
+                os.path.join(basedir, 'viz-inspect-data')
+            )
+            objectplot = os.path.abspath(made_plot)
+
+
+        # this is the dict we return
+        retdict = {
+            'info': objectinfo_dict,
+            'plot':os.path.basename(objectplot),
+            'comments':comments
+        }
+
+        return retdict
+
+    except Exception as e:
+        LOGGER.exception("Could not get info for object: %s" % objectid)
         return None
 
-    #
-    # get the plot for the object
-    #
 
-    plotfile = os.path.join(
+def worker_get_objects(review_status='all',
+                       userid=None,
+                       start_keyid=0,
+                       end_keyid=50,
+                       allinfo=False):
+    '''
+    This returns the full object list.
+
+    '''
+
+
+def worker_insert_object_comments(
+        userid,
+        comments
+):
+    '''
+    This inserts object comments.
+
+    '''
+
+
+def worker_update_object_flags(
+        objectid,
+        flags,
+):
+    '''
+    This updates object flags.
+
+    '''
+
+
+
+def worker_export_catalog(
         basedir,
-        images_subdir,
-        '{catalog_fname}-{index}-plot.png'.format(
-            catalog_fname=os.path.splitext(os.path.basename(catalog_csv))[0],
-            index=source_index
-        )
-    )
+        outdir='viz-inspect-data',
+):
+    '''This exports the catalog from the DB to the output dir.
 
-    if not os.path.exists(plotfile):
+    By default the file is written to the viz-inspect-data dir under the
+    basedir. This allows the server to serve it back to the client if they want
+    to download it after exporting it.
 
-        try:
-            images.make_main_plot(
-                cat,
-                source_index,
-                basedir,
-                plot_fontsize=plot_fontsize,
-                images_subdir=images_subdir,
-                site_datadir=site_datadir,
-                outfile=plotfile
-            )
-
-        except Exception as e:
-            LOGGER.exception('could not make plot for '
-                             'source: %s in catalog: %s'
-                             % (source_index, catalog_csv))
-            plotfile = None
-
-    #
-    # get the comments for the object
-    #
-    object_comments = comm[comm['source_index'] == source_index]
-
-    # this is the dict we return
-    retdict = {
-        'info': cat.iloc[source_index],
-        'plot':plotfile,
-        'comments':object_comments
-    }
-
-    return retdict
+    '''
 
 
 
 #####################
-## MAIN INDEX PAGE ##
+## OBJECT HANDLERS ##
 #####################
+
+
+class ObjectListHandler(BaseHandler):
+    '''
+    This handles the /api/list-objects endpoint.
+
+    '''
+
+    def initialize(self,
+                   currentdir,
+                   templatepath,
+                   assetpath,
+                   executor,
+                   basedir,
+                   siteinfo,
+                   authnzerver,
+                   session_expiry,
+                   fernetkey,
+                   ratelimit,
+                   cachedir):
+        '''
+        handles initial setup.
+
+        '''
+
+        self.currentdir = currentdir
+        self.templatepath = templatepath
+        self.assetpath = assetpath
+        self.executor = executor
+        self.basedir = basedir
+        self.siteinfo = siteinfo
+        self.authnzerver = authnzerver
+        self.session_expiry = session_expiry
+        self.fernetkey = fernetkey
+        self.ferneter = Fernet(fernetkey)
+        self.httpclient = AsyncHTTPClient(force_instance=True)
+        self.ratelimit = ratelimit
+        self.cachedir = cachedir
+
+
+    @gen.coroutine
+    def get(self, objectid):
+        '''This handles GET requests to the /api/list-objects endpoint.
+
+        Parameters
+        ----------
+
+        review_status : str, optional, default = 'all'
+            Sets the type of list retrieval:
+
+            - 'all' -> all objects
+            - 'reviewed-all' -> all objects that have been reviewed
+            - 'unreviewed-all' -> all objects that have not been reviewed
+            - 'reviewed-self' -> objects reviewed by this user
+            - 'reviewed-other' -> objects reviewed by other users
+            - 'unreviewed-self' -> objects reviewed by this user
+            - 'unreviewed-other' -> objects reviewed by other users
+
+            For -self retrieval types, we'll get the userid out of the session
+            dict.
+
+        start_keyid : int, optional, default = 0
+            The first object keyid to retrieve. Useful for pagination.
+
+        end_keyid : int, optional, default = 50
+            The last object keyid to retrieve. Useful for pagination.
+
+        allinfo : int, {0,1}, default = 0
+            If 1, then all object information will be retrieved. If 0, only the
+            objectids will be retrieved.
+
+        '''
+
+
 
 class LoadObjectHandler(BaseHandler):
     '''This handles the /api/load-object endpoint.
@@ -195,10 +298,7 @@ class LoadObjectHandler(BaseHandler):
                    session_expiry,
                    fernetkey,
                    ratelimit,
-                   cachedir,
-                   catalog_csv,
-                   flags_to_use,
-                   file_lock):
+                   cachedir):
         '''
         handles initial setup.
 
@@ -218,16 +318,9 @@ class LoadObjectHandler(BaseHandler):
         self.ratelimit = ratelimit
         self.cachedir = cachedir
 
-        self.catalog_csv = catalog_csv
-        self.flags_to_use = flags_to_use
-
-        # this is a tornado.locks Lock to serialize access to the CSV files on
-        # disk
-        self.file_lock = file_lock
-
 
     @gen.coroutine
-    def get(self, source_index):
+    def get(self, objectid):
         '''This handles GET requests to the /api/load-object/<index> endpoint.
 
         Gets catalog and comment info, plots the object if not already plotted,
@@ -237,21 +330,14 @@ class LoadObjectHandler(BaseHandler):
 
         try:
 
-            objindex = int(xhtml_escape(source_index))
+            objindex = int(xhtml_escape(objectid))
             if objindex < 0:
                 objindex = 0
 
             objectinfo = yield self.executor.submit(
-                _load_object_from_catalog,
-                self.catalog_csv,
-                source_index,
+                worker_get_object,
+                objindex,
                 self.basedir,
-                review_mode=False,
-                flags_to_use=self.flags_to_use,
-                load_comments=True,
-                plot_fontsize=15,
-                images_subdir=self.siteinfo['images_subdir'],
-                site_datadir=self.siteinfo['data_path']
             )
 
             retdict = {'status':'ok',
@@ -263,10 +349,10 @@ class LoadObjectHandler(BaseHandler):
 
         except Exception as e:
 
-            LOGGER.exception('failed to get requested source_index')
+            LOGGER.exception('failed to get requested object ID: %r' % objectid)
             self.set_status(400)
             retdict = {'status':'failed',
-                       'message':'Invalid request for object index.',
+                       'message':'Invalid request for object ID',
                        'result':None}
             self.write(retdict)
             self.finish()
@@ -274,7 +360,7 @@ class LoadObjectHandler(BaseHandler):
 
 
 class SaveObjectHandler(BaseHandler):
-    '''This handles the /api/save-object endpoint.
+    '''This handles the /api/save-object/<objectid>/<comments|flags> endpoint.
 
     '''
 
@@ -289,10 +375,7 @@ class SaveObjectHandler(BaseHandler):
                    session_expiry,
                    fernetkey,
                    ratelimit,
-                   cachedir,
-                   catalog_csv,
-                   comment_csv,
-                   file_lock):
+                   cachedir):
         '''
         handles initial setup.
 
@@ -312,17 +395,10 @@ class SaveObjectHandler(BaseHandler):
         self.ratelimit = ratelimit
         self.cachedir = cachedir
 
-        self.catalog_csv = catalog_csv
-        self.comment_csv = comment_csv
-
-        # this is a tornado.locks Lock to serialize access to the CSV files on
-        # disk
-        self.file_lock = file_lock
-
 
     @gen.coroutine
-    def post(self):
-        '''This handles POST requests to the /api/save-object endpoint.
+    def post(self, savetype):
+        '''This handles POST requests to /api/save-object/<comment|flag>.
 
         This only saves the current object.
 
