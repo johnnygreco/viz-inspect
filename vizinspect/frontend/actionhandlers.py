@@ -73,7 +73,7 @@ LOGGER = logging.getLogger(__name__)
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.escape import xhtml_escape
-
+from tornado import web
 
 ###################
 ## LOCAL IMPORTS ##
@@ -88,7 +88,7 @@ from ..backend import catalogs, images
 ## WORKER FUNCTIONS ##
 ######################
 
-def worker_get_object(objectid, basedir):
+def worker_get_object(objectid, basedir, userid):
     '''
     This does the actual work of loading the object.
 
@@ -100,6 +100,10 @@ def worker_get_object(objectid, basedir):
     - plot files have names like '{catalog_fname}-source-{index}-plot.png'
     - these are kept around until the server exits
     - if a plot file exists, we don't try to make a new one
+
+    FIXME: this should load stuff read-only if the current object's
+    reviewer_userid doesn't match the current user's ID (e.g. they haven't
+    been assigned to review this object).
 
     '''
 
@@ -125,6 +129,7 @@ def worker_get_object(objectid, basedir):
         del objectinfo_dict['comment_by_userid']
         del objectinfo_dict['comment_userset_flags']
         del objectinfo_dict['comment_text']
+        objectinfo_dict['filepath'] = 'redacted'
 
         # get the plot if it exists
         objectplot = os.path.abspath(
@@ -326,7 +331,29 @@ class LoadObjectHandler(BaseHandler):
         Gets catalog and comment info, plots the object if not already plotted,
         and then returns JSON with everything.
 
+        FIXME: this should load stuff read-only if the current object's
+        reviewer_userid doesn't match the current user's ID (e.g. they haven't
+        been assigned to review this object).
+
         '''
+
+        # check if we're actually logged in
+        if not self.current_user:
+            retdict = {'status':'failed',
+                       'message':'You must be logged in to view objects.',
+                       'result': None}
+            self.set_status(401)
+            self.write(retdict)
+            raise web.Finish()
+
+        if self.current_user and self.current_user['user_role'] in ('anonymous',
+                                                                    'locked'):
+            retdict = {'status':'failed',
+                       'message':'You must be logged in to view objects.',
+                       'result': None}
+            self.set_status(401)
+            self.write(retdict)
+            raise web.Finish()
 
         try:
 
@@ -337,12 +364,21 @@ class LoadObjectHandler(BaseHandler):
             objectinfo = yield self.executor.submit(
                 worker_get_object,
                 objindex,
+                self.current_user['user_id'],
                 self.basedir,
             )
 
-            retdict = {'status':'ok',
-                       'message':'object found OK',
-                       'result':objectinfo}
+            if objectinfo is not None:
+
+                retdict = {'status':'ok',
+                           'message':'object found OK',
+                           'result':objectinfo}
+
+            else:
+                retdict = {'status':'failed',
+                           'message':"Object with specified ID not found.",
+                           'result':None}
+                self.set_status(404)
 
             self.write(retdict)
             self.finish()
