@@ -359,7 +359,7 @@ def main():
 
         # update the site-info.json file
         with open(siteinfojson,'w') as outfd:
-            json.dump(SITEINFO, infd, indent=2)
+            json.dump(SITEINFO, outfd, indent=2)
 
         # now we have the catalog CSV and image dir
         # load the objects into the DB
