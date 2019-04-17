@@ -472,25 +472,29 @@ def get_objects(
 
     elif review_status == 'reviewed-self' and userid is not None:
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid == userid
+            object_comments.c.userid == userid
         ).where(
             object_comments.c.added != None
-        )
-    elif review_status == 'unreviewed-self' and userid is not None:
-        actual_sel = sel.where(
-            object_catalog.c.reviewer_userid == userid
-        ).where(
-            object_comments.c.added == None
         )
     elif review_status == 'reviewed-other' and userid is not None:
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid != userid
+            object_comments.c.userid != userid
         ).where(
             object_comments.c.added != None
         )
-    elif review_status == 'unreviewed-other' and userid is not None:
+    elif review_status == 'assigned-self' and userid is not None:
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid != userid
+            object_catalog.c.reviewer_userid == userid
+        )
+    elif review_status == 'assigned-reviewed' and userid is not None:
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid == userid
+        ).where(
+            object_comments.c.added != None
+        )
+    elif review_status == 'assigned-unreviewed' and userid is not None:
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid == userid
         ).where(
             object_comments.c.added == None
         )

@@ -41,7 +41,7 @@
 
       <div class="row justify-content-between">
 
-        <div class="col-3 d-flex justify-content-start">
+        <div class="col-2 d-flex justify-content-start">
 
           <button type="button"
                   class="btn btn-outline-info"
@@ -51,12 +51,12 @@
 
         </div>
 
-        <div class="col-6 d-flex justify-content-center" >
+        <div class="col-8 d-flex justify-content-center" >
 
           <div class="input-group">
             <div class="input-group-prepend">
               <span class="input-group-text"
-                    id="current-index">Current source</span>
+                    id="current-index-label">Current object ID</span>
             </div>
             <input type="text"
                    id="current-source-index" data-keyid="0"
@@ -66,13 +66,13 @@
             <div class="input-group-append">
               <button class="btn btn-outline-success"
                       type="button"
-                      id="jump-source-index">Jump</button>
+                      id="jump-source-index">Jump to object</button>
             </div>
           </div>
 
         </div>
 
-        <div class="col-3 d-flex justify-content-end">
+        <div class="col-2 d-flex justify-content-end">
 
           <button type="button"
                   class="btn btn-outline-info"
@@ -135,12 +135,12 @@
         {% module xsrf_form_html() %}
         <div class="row" >
 
-          <div class="col-sm-12 col-md-9" >
+          <div class="col-sm-12 col-md-8" >
 
             <div class="form-group">
               <label for="object-notes">Notes on this object</label>
               <textarea class="form-control" id="object-notes" rows="5"
-                        placeholder="Notes for this object go here. Markdown formatting is supported.">
+                        placeholder="Notes for this object go here. Markdown formatting is supported. ADS bibcodes and most DOIs will be automatically linkified.">
               </textarea>
             </div>
 
@@ -151,7 +151,7 @@
 
           </div>
 
-          <div class="col-sm-12 col-md-3" >
+          <div class="col-sm-12 col-md-4" >
 
             <h4>Object flags</h4>
 
@@ -224,21 +224,18 @@
 
       <div class="row mt-4">
         <div class="col-12">
-          <h4>List of all objects</h4>
-
+          <h4>Currently browsing</h4>
           <form>
             <div class="form-group">
-              <label class="form-label" for="objectlist-pref-select">
-                Types of objects to show
-              </label>
               <select class="custom-select" id="objectlist-pref-select">
-                <option val="all">All objects</option>
-                <option val="reviewed-all">All reviewed objects</option>
-                <option val="unreviewed-all">All unreviewed objects</option>
-                <option val="reviewed-self">Only objects reviewed by me</option>
-                <option val="unreviewed-self">Only objects not reviewed by me</option>
-                <option val="reviewed-other">Only objects reviewed by others</option>
-                <option val="unreviewed-other">Only objects not reviewed by others</option>
+                <option value="all">All objects</option>
+                <option value="assigned-self">Objects assigned for my review</option>
+                <option value="assigned-unreviewed">Assigned but unreviewed objects</option>
+                <option value="assigned-reviewed">Assigned and reviewed objects</option>
+                <option value="reviewed-all">Everyone's reviewed objects</option>
+                <option value="unreviewed-all">Everyone's unreviewed objects</option>
+                <option value="reviewed-self">Objects reviewed by me</option>
+                <option value="reviewed-other">Objects reviewed by others</option>
               </select>
             </div>
           </form>

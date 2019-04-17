@@ -403,6 +403,38 @@ var ui = {
 
     });
 
+    // handle selecting a object-view type
+    $('#objectlist-pref-select').on('change', function (evt) {
+
+      let selected = $(this).val();
+
+      if (selected === 'reviewed-all') {
+        review.get_object_list('reviewed-all', 0, 'none', false);
+      }
+      else if (selected === 'unreviewed-all') {
+        review.get_object_list('unreviewed-all', 0, 'none', false);
+      }
+      else if (selected === 'reviewed-self') {
+        review.get_object_list('reviewed-self', 0, 'none', false);
+      }
+      else if (selected === 'reviewed-other') {
+        review.get_object_list('reviewed-other', 0, 'none', false);
+      }
+      else if (selected === 'assigned-self') {
+        review.get_object_list('assigned-self', 0, 'none', false);
+      }
+      else if (selected === 'assigned-reviewed') {
+        review.get_object_list('assigned-reviewed', 0, 'none', false);
+      }
+      else if (selected === 'assigned-unreviewed') {
+        review.get_object_list('assigned-unreviewed', 0, 'none', false);
+      }
+      else {
+        review.get_object_list('all', 0, 'none', false);
+      }
+
+    });
+
 
     //////////////////////////////////
     // COMMENT FORM SUBMIT BINDINGS //
@@ -460,7 +492,8 @@ var review = {
         review.objectlist_start_keyid = result.start_keyid;
         review.objectlist_end_keyid = result.start_keyid;
 
-        // TODO: update the object list controls with the object IDs
+        $('#objectid-list').empty();
+
         for (let objectid of review.objectlist) {
 
           let this_elem =
@@ -488,6 +521,32 @@ var review = {
         review.get_object(review.objectlist[0]);
 
       }
+
+      // update the object list type
+      let index_label = 'Current object (browsing all objects)';
+
+      if (review_status === 'reviewed-all') {
+        index_label = "Current object (in everyone's reviewed objects)";
+      }
+      else if (review_status === 'unreviewed-all') {
+        index_label = "Current object (in everyone's unreviewed objects)";
+      }
+      else if (review_status === 'reviewed-self') {
+        index_label = 'Current object (in objects reviewed by me)';
+      }
+      else if (review_status === 'reviewed-other') {
+        index_label = 'Current object (in objects reviewed by others)';
+      }
+      else if (review_status === 'assigned-self') {
+        index_label = 'Current object (in my assigned objects)';
+      }
+      else if (review_status === 'assigned-reviewed') {
+        index_label = 'Current object (in my assigned-reviewed objects)';
+      }
+      else if (review_status === 'assigned-unreviewed') {
+        index_label = 'Current object (in my assigned-unreviewed objects)';
+      }
+      $('#current-index-label').html(index_label);
 
 
     }).fail( function (xhr) {
@@ -527,6 +586,9 @@ var review = {
         $('#galaxy-main-plot').attr('data-sourceindex', objectinfo.objectid);
         $('#galaxy-main-plot').attr('data-ra', objectinfo.ra);
         $('#galaxy-main-plot').attr('data-dec', objectinfo.dec);
+
+        // clean out the comment box
+        $('#object-notes').val('');
 
         // update the objectid and keyid
         $('#current-source-index').val(objectinfo.objectid);
@@ -594,19 +656,26 @@ var review = {
           $('#save-current-object').prop('disabled',true);
         }
 
-        // clear out the all comments box
+        // clear out the comment stream for this object
         $('.all-object-comments').empty();
 
         for (let comment of comments) {
 
           if (comment.comment_added_on !== null) {
 
-            let comment_user_flags = '';
+            let comment_user_flags = '<table class="table table-sm">';
 
             for (let flag in comment.comment_userset_flags) {
-              comment_user_flags += ' <strong>' +
-                flag + ':</strong> ' + comment.comment_userset_flags[flag];
+
+              let this_flag_val = '<span class="text-danger">false</span>';
+              if (comment.comment_userset_flags[flag] === true) {
+                this_flag_val = '<span class="text-primary">true</span>';
+              }
+
+              comment_user_flags += '<tr><th>' + flag + '</th><td>' +
+                this_flag_val + '</td></tr>';
             }
+            comment_user_flags += '</table>';
 
             let comment_made_by = '';
             if (comment.comment_by_username !== null) {
@@ -623,11 +692,11 @@ var review = {
                 ${comment_made_by} said
               </div>
               <div class="card-body">
-                ${comment.comment_text}
+                ${ui.bib_linkify(comment.comment_text)}
 
                 <div class="mt-2">
                   <strong>Set object flags</strong>
-                  <p>${comment_user_flags}</p>
+                  ${comment_user_flags}
                 </div>
 
               </div>

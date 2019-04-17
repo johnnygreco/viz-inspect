@@ -419,6 +419,18 @@ class ObjectListHandler(BaseHandler):
             review_status = xhtml_escape(
                 self.get_argument('review_status','all')
             )
+
+            if review_status not in ('all',
+                                     'assigned-self',
+                                     'assigned-reviewed',
+                                     'assigned-unreviewed',
+                                     'reviewed-all',
+                                     'unreviewed-all',
+                                     'reviewed-self',
+                                     'reviewed-other'):
+                raise ValueError("Unknown review status requested: '%s'" %
+                                 review_status)
+
             start_keyid = xhtml_escape(self.get_argument('start_keyid', '0'))
             end_keyid = xhtml_escape(self.get_argument('end_keyid', '50'))
 

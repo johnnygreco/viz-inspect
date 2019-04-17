@@ -305,13 +305,13 @@ footer img {
 }
 
 #all-object-list {
-  height: 25em;
+  height: 22em;
   overflow-y: auto;
   font-size: small;
 }
 
 .all-object-comments {
-  height: 22em;
+  height: 26em;
   overflow-y: auto;
   font-size: small;
 }
