@@ -5,5 +5,10 @@
   "rate_limit_active": true,
   "data_path":"./viz-inspect-data",
   "cache_location": "/tmp/vizinspect-cache",
-  "database_url":"postgresql://localhost/vizinspect"
+  "database_url":"postgresql://localhost/vizinspect",
+  "allowed_user_emailaddr":[
+    "user1@example.edu",
+    "user2@example.edu",
+    "user3@example.edu"
+  ]
 }

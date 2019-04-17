@@ -66,7 +66,7 @@ LOGGER = logging.getLogger(__name__)
 
 import tornado.web
 from tornado import gen
-from tornado.escape import xhtml_escape
+from tornado.escape import xhtml_escape, squeeze
 from tornado.httpclient import AsyncHTTPClient
 
 
@@ -359,12 +359,31 @@ class NewUserHandler(BaseHandler):
             )
             self.redirect('/users/new')
 
+        # check if this email address is allowed to sign up for an account
+        if ('allowed_user_emailaddr' in self.siteinfo and
+            len(self.siteinfo['allowed_user_emailaddr']) > 0):
+
+            if (squeeze(email.lower().strip()) not in
+                self.siteinfo['allowed_user_emailaddr']):
+
+                LOGGER.error("Email: %s is not allowed to sign up." % email)
+
+                self.save_flash_messages(
+                    "Sorry, the email address you entered wasn't found in "
+                    "the list of people allowed to "
+                    "sign up for an account here.",
+                    "danger"
+                )
+                self.redirect('/users/new')
+                raise tornado.web.Finish()
+
+
         # talk to the authnzerver to sign this user up
         ok, resp, msgs = yield self.authnzerver_request(
             'user-new',
             {'session_token':current_user['session_token'],
              'username':username,
-             'email':email,
+             'email':squeeze(email.lower().strip()),
              'password':password}
         )
 

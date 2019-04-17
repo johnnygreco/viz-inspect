@@ -361,16 +361,26 @@ class BaseHandler(tornado.web.RequestHandler):
         # normal authenticated user
         elif current_user and current_user['user_role'] == 'authenticated':
 
+            if current_user['full_name'] is not None:
+                box_name = current_user['full_name']
+            else:
+                box_name = current_user['email']
+
             user_account_box = self.signedin_account_box.format(
-                current_user=current_user['email']
+                current_user=box_name
             )
 
         # super users and staff
         elif current_user and current_user['user_role'] in ('superuser',
                                                             'staff'):
 
+            if current_user['full_name'] is not None:
+                box_name = current_user['full_name']
+            else:
+                box_name = current_user['email']
+
             user_account_box = self.admin_account_box.format(
-                current_user=current_user['email']
+                current_user=box_name
             )
 
         # anything else will be shown the usual box because either the user is

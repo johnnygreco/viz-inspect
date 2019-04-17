@@ -223,12 +223,77 @@ def worker_get_objects(review_status='all',
 
 def worker_insert_object_comments(
         userid,
-        comments
+        username,
+        comments,
 ):
     '''
     This inserts object comments.
 
     '''
+
+    try:
+
+        currproc = mp.current_process()
+        conn, meta = currproc.connection, currproc.metadata
+
+        # this returns a list of dicts {'objectid': <objectid>}
+        updated = catalogs.insert_object_comments(
+            userid,
+            comments,
+            (conn, meta),
+            username=username,
+        )
+
+        # reform to a single list
+        objectid = updated[0]['objectid']
+        objectinfo_dict = updated[0]
+
+        all_comments = [{'comment_added_on':x['comment_added_on'],
+                         'comment_by_userid':x['comment_by_userid'],
+                         'comment_by_username':x['comment_by_username'],
+                         'comment_userset_flags':x['comment_userset_flags'],
+                         'comment_text':x['comment_text']} for x in updated]
+
+        all_comments = sorted(all_comments,
+                              key=lambda x: x['comment_added_on'],
+                              reverse=True)
+
+        del objectinfo_dict['comment_added_on']
+        del objectinfo_dict['comment_by_userid']
+        del objectinfo_dict['comment_by_username']
+        del objectinfo_dict['comment_userset_flags']
+        del objectinfo_dict['comment_text']
+        objectinfo_dict['filepath'] = 'redacted'
+
+        # get the plot if it exists
+        objectplot = 'plot-objectid-{objectid}.png'.format(objectid=objectid)
+
+        # set the readonly flag
+        if (objectinfo_dict['reviewer_userid'] is not None and
+            userid == objectinfo_dict['reviewer_userid']):
+            readonly = False
+        elif (objectinfo_dict['reviewer_userid'] is not None and
+              userid != objectinfo_dict['reviewer_userid']):
+            readonly = True
+        elif (objectinfo_dict['reviewer_userid'] is None):
+            readonly = False
+        else:
+            readonly = True
+
+        # this is the dict we return
+        retdict = {
+            'info': objectinfo_dict,
+            'plot':os.path.basename(objectplot),
+            'comments':all_comments,
+            'readonly':readonly
+        }
+
+        return retdict
+
+    except Exception as e:
+        LOGGER.exception("Could not insert the comments into the DB.")
+        return None
+
 
 
 def worker_update_object_flags(
