@@ -117,12 +117,19 @@ def worker_get_object(objectid, basedir, userid):
 
         comments = [{'comment_added_on':x['comment_added_on'],
                      'comment_by_userid':x['comment_by_userid'],
+                     'comment_by_username':x['comment_by_username'],
                      'comment_userset_flags':x['comment_userset_flags'],
                      'comment_text':x['comment_text']} for x in objectinfo]
+
+        comments = sorted(comments,
+                          key=lambda x: x['comment_added_on'],
+                          reverse=True)
+
 
         objectinfo_dict = objectinfo[0]
         del objectinfo_dict['comment_added_on']
         del objectinfo_dict['comment_by_userid']
+        del objectinfo_dict['comment_by_username']
         del objectinfo_dict['comment_userset_flags']
         del objectinfo_dict['comment_text']
         objectinfo_dict['filepath'] = 'redacted'
@@ -201,7 +208,7 @@ def worker_get_objects(review_status='all',
 
         # this is the dict we return
         retdict = {
-            'objectlist': returned_objectlist,
+            'objectlist': list(set(returned_objectlist)),
             'start_keyid':ret_start_keyid,
             'end_keyid':ret_end_keyid,
         }

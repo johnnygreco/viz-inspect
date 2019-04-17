@@ -1008,7 +1008,7 @@ def create_new_user(payload,
                     override_authdb_path=None):
     '''This makes a new user.
 
-    payload keys: email, password
+    payload keys: username, email, password
 
     Returns the user_id and email if successful.
 
@@ -1032,6 +1032,15 @@ def create_new_user(payload,
     user_role will be set to 'authenticated'.
 
     '''
+
+    if 'username' not in payload:
+        return {
+            'success':False,
+            'user_email':None,
+            'user_id':None,
+            'send_verification':False,
+            'messages':["Invalid user creation request."]
+        }
 
     if 'email' not in payload:
         return {
@@ -1098,6 +1107,7 @@ def create_new_user(payload,
 
         ins = users.insert({
             'password':hashed_password,
+            'full_name':payload['username'],
             'email':payload['email'],
             'email_verified':False,
             'is_active':False,

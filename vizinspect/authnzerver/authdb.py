@@ -753,6 +753,7 @@ def get_auth_db(auth_db_path, echo=False):
 
 def initial_authdb_inserts(auth_db_path,
                            superuser_email=None,
+                           superuser_username=None,
                            superuser_pass=None,
                            echo=False):
     '''
@@ -797,6 +798,9 @@ def initial_authdb_inserts(auth_db_path,
         except Exception as e:
             superuser_email = 'admin@localhost'
 
+    if not superuser_username:
+        superuser_username = superuser_email.split('@')[0]
+
     if not superuser_pass:
         superuser_pass = secrets.token_urlsafe(16)
         superuser_pass_auto = True
@@ -809,6 +813,7 @@ def initial_authdb_inserts(auth_db_path,
         users.insert().values([
             # the superuser
             {'password':hashed_password,
+             'full_name':superuser_username,
              'email':superuser_email,
              'email_verified':True,
              'is_active':True,
@@ -817,6 +822,7 @@ def initial_authdb_inserts(auth_db_path,
              'last_updated':datetime.utcnow()},
             # the anonuser
             {'password':password_context.hash(secrets.token_urlsafe(32)),
+             'full_name':'The system-wide anonymous user',
              'email':'anonuser@localhost',
              'email_verified':True,
              'is_active':True,
@@ -825,6 +831,7 @@ def initial_authdb_inserts(auth_db_path,
              'last_updated':datetime.utcnow()},
             # the dummyuser to fail passwords for nonexistent users against
             {'password':password_context.hash(secrets.token_urlsafe(32)),
+             'full_name':'The system-wide locked user',
              'email':'dummyuser@localhost',
              'email_verified':True,
              'is_active':False,
@@ -836,9 +843,9 @@ def initial_authdb_inserts(auth_db_path,
     result.close()
 
     if superuser_pass_auto:
-        return superuser_email, superuser_pass
+        return superuser_email, superuser_username, superuser_pass
     else:
-        return superuser_email, None
+        return superuser_email, superuser_username, None
 
 
 

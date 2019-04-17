@@ -546,7 +546,7 @@ var review = {
             $('#flag-checkbox-group').append(
               "<p>This object is not in your review " +
                 "assigment so it has been marked as <em>read-only</em>.</p>"
-            )
+            );
           }
 
           let thisrow = `
@@ -560,10 +560,44 @@ var review = {
 
         }
 
-        // TODO: handle the notes form
+        // handle the object comments
 
+        // clear out the comment box
+        $('.all-object-comments').empty();
 
-        // TODO: handle the object comments
+        for (let comment of comments) {
+
+          if (comment.comment_added_on !== null) {
+
+            let comment_user_flags = '';
+
+            for (let flag in comment.comment_userset_flags) {
+              comment_user_flags += ' <strong>' +
+                flag + ':</strong> ' + comment.comment_userset_flags[flag];
+            }
+
+            let comment_box = `
+            <div class="card mb-3 mx-1">
+              <div class="card-header">
+                ${moment(comment.comment_added_on).calendar()},
+                ${comment.comment_by_userid} said
+              </div>
+              <div class="card-body">
+                ${comment.comment_text}
+
+                <div class="mt-2">
+                  <strong>Set object flags</strong>
+                  <p>${comment_user_flags}</p>
+                </div>
+
+              </div>
+            </div>
+`;
+            $('.all-object-comments').append(comment_box);
+
+          }
+
+        }
 
 
       }

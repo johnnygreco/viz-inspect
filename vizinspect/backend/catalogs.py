@@ -322,12 +322,15 @@ def get_object(objectid,
          object_images.c.filepath,
          object_comments.c.added.label("comment_added_on"),
          object_comments.c.userid.label("comment_by_userid"),
+         object_comments.c.username.label("comment_by_username"),
          object_comments.c.user_flags.label("comment_userset_flags"),
          object_comments.c.contents.label("comment_text")]
     ).select_from(
         join
     ).where(
         object_catalog.c.objectid == objectid
+    ).order_by(
+        object_comments.c.added.desc()
     )
 
     with conn.begin():
@@ -448,6 +451,7 @@ def get_objects(
              object_images.c.filepath,
              object_comments.c.added.label("comment_added_on"),
              object_comments.c.userid.label("comment_by_userid"),
+             object_comments.c.username.label("comment_by_username"),
              object_comments.c.user_flags.label("comment_userset_flags"),
              object_comments.c.contents.label("comment_text")]
         ).select_from(
@@ -542,6 +546,7 @@ def export_all_objects(outfile,
 def insert_object_comments(userid,
                            comments,
                            dbinfo,
+                           username=None,
                            dbkwargs=None):
     '''
     This inserts a comment for the object.
@@ -568,6 +573,9 @@ def insert_object_comments(userid,
 
         If the database URL is provided, a new engine will be used. If the
         connection itself is provided, it will be re-used.
+
+    username : str or None
+        The name of the user making the comment.
 
     dbkwargs : dict or None
         A dict of kwargs to pass to the database open function.
@@ -625,6 +633,7 @@ def insert_object_comments(userid,
              'added':added,
              'updated':updated,
              'userid':userid,
+             'username':username,
              'user_flags':user_flags,
              'contents':comment_text}
         )

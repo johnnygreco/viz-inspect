@@ -221,6 +221,15 @@ def autogen_secrets_authdb(basedir, logger):
     if inp_userid and len(inp_userid.strip()) > 0:
         userid = inp_userid
 
+    inp_username = input(
+        'Admin user name [default: %s]: ' %
+        userid.split('@')[0]
+    )
+    if inp_username and len(inp_username.strip()) > 0:
+        username = inp_username
+    else:
+        username = userid.split('@')[0]
+
     inp_pass = getpass.getpass(
         'Admin password [default: randomly generated]: '
     )
@@ -230,14 +239,15 @@ def autogen_secrets_authdb(basedir, logger):
         password = None
 
     # generate the admin users and initial DB info
-    u, p = initial_authdb_inserts('sqlite:///%s' % authdb_path,
-                                  superuser_email=userid,
-                                  superuser_pass=password)
+    u, n, p = initial_authdb_inserts('sqlite:///%s' % authdb_path,
+                                     superuser_email=userid,
+                                     superuser_username=username,
+                                     superuser_pass=password)
 
     creds = os.path.join(basedir,
                          '.server.admin-credentials')
     with open(creds,'w') as outfd:
-        outfd.write('%s %s\n' % (u,p))
+        outfd.write('%s %s %s\n' % (u,n,p))
         os.chmod(creds, 0o100400)
 
     if p:

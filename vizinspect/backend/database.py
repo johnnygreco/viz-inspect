@@ -83,6 +83,7 @@ Comments = Table(
     Column('objectid', Integer, ForeignKey('object_catalog.objectid'),
            nullable=False, index=True),
     Column('userid', Integer, nullable=False, index=True),
+    Column('username', Text, index=True),
     # this is the per-user set flags
     Column('user_flags',postgresql.JSONB),
     Column('contents', Text),

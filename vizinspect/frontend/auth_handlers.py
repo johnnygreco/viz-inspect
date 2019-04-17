@@ -345,14 +345,16 @@ class NewUserHandler(BaseHandler):
         # get the provided email and password
         try:
 
+            username = xhtml_escape(self.get_argument('username'))
             email = xhtml_escape(self.get_argument('email'))
             password = self.get_argument('password')
 
         except Exception as e:
 
-            LOGGER.error('email and password are both required.')
+            LOGGER.error('username, email, and password are all required.')
             self.save_flash_messages(
-                "An email address and strong password are both required.",
+                "A user name, email address, and "
+                "strong password are all required.",
                 "warning"
             )
             self.redirect('/users/new')
@@ -361,6 +363,7 @@ class NewUserHandler(BaseHandler):
         ok, resp, msgs = yield self.authnzerver_request(
             'user-new',
             {'session_token':current_user['session_token'],
+             'username':username,
              'email':email,
              'password':password}
         )
