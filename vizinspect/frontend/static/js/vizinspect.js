@@ -328,6 +328,7 @@ var ui = {
     // CONTROL BINDINGS //
     //////////////////////
 
+    // handle the next object link
     $('#next-object-link').on('click', function (evt) {
 
       // find the previous object in the objectlist
@@ -343,6 +344,7 @@ var ui = {
 
     });
 
+    // handle the previous object link
     $('#prev-object-link').on('click', function (evt) {
 
       // find the previous object in the objectlist
@@ -359,7 +361,7 @@ var ui = {
 
     });
 
-
+    // handle the jump button
     $('#jump-source-index').on('click', function (evt) {
 
       let jump_to = parseInt($('#current-source-index').val());
@@ -373,6 +375,25 @@ var ui = {
 
     });
 
+    // handle enter key in the jump box
+    $('#current-source-index').on('keyup', function (evt) {
+
+      if (evt.keyCode == 13) {
+
+        let jump_to = parseInt($('#current-source-index').val());
+
+        if (!isNaN(jump_to)) {
+
+          // fire the get object function
+          ui.debounce(review.get_object(jump_to), 250);
+
+        }
+
+      }
+
+    });
+
+    // handle clicking on a link in the objectid list
     $('#objectid-list').on('click','.objectid-link', function (evt) {
 
       evt.preventDefault();
@@ -383,15 +404,20 @@ var ui = {
     });
 
 
-    //////////////////////////
-    // FORM SUBMIT BINDINGS //
-    //////////////////////////
+    //////////////////////////////////
+    // COMMENT FORM SUBMIT BINDINGS //
+    //////////////////////////////////
 
     // bind the form submit for the review
-    $('#review-form').on('submit', function (event) {
+    $('#comment-form').on('submit', function (event) {
 
       event.preventDefault();
-      ui.debounce(review.do_review(), 250);
+
+      // get the current objectid
+      let this_objectid = review.current_objectid;
+
+      // fire the save object handler
+      ui.debounce(review.save_object_comments_flags(this_objectid), 250);
 
     });
 
@@ -552,7 +578,8 @@ var review = {
           let thisrow = `
 <div class="custom-control custom-checkbox">
   <input type="checkbox"
-         class="custom-control-input"
+         class="custom-control-input object-flags-check"
+         value="${item}"
          id="check-${item}" ${checkbox_checked} ${checkbox_disabled}>
   <label class="custom-control-label" for="check-${item}">${item}</label>
 </div>`;
@@ -560,9 +587,14 @@ var review = {
 
         }
 
-        // handle the object comments
+        // handle the object comments and the submit button in case they're
+        // readonly
+        if (review.current_readonly) {
+          $('#object-notes').prop('disabled',true);
+          $('#save-current-object').prop('disabled',true);
+        }
 
-        // clear out the comment box
+        // clear out the all comments box
         $('.all-object-comments').empty();
 
         for (let comment of comments) {
@@ -576,11 +608,19 @@ var review = {
                 flag + ':</strong> ' + comment.comment_userset_flags[flag];
             }
 
+            let comment_made_by = '';
+            if (comment.comment_by_username !== null) {
+              comment_made_by = comment.comment_by_username;
+            }
+            else {
+              comment_made_by = 'User ID ' + comment.comment_by_userid;
+            }
+
             let comment_box = `
             <div class="card mb-3 mx-1">
               <div class="card-header">
                 ${moment(comment.comment_added_on).calendar()},
-                ${comment.comment_by_userid} said
+                ${comment_made_by} said
               </div>
               <div class="card-body">
                 ${comment.comment_text}
@@ -614,23 +654,51 @@ var review = {
   },
 
 
-  do_review: function (override_params) {
+  save_object_comments_flags: function (objectid) {
 
-    var _xsrf;
-    var posturl = '/api/review';
-    var postparams;
+    let _xsrf;
+    let posturl = `/api/save-object/${objectid}`;
+    let postparams;
 
     // get the value of the _xsrf token
-    _xsrf = $('#xmatch-form > input[type="hidden"]').val();
+    _xsrf = $('#comment-form > input[type="hidden"]').val();
+
+    // get the comments
+    let comment_text = $('#object-notes').val();
+
+    // get the flags
+    let object_flags = {};
+    for (let item of $('.object-flags-check')) {
+      object_flags[item.value] = item.checked;
+    }
+    object_flags = JSON.stringify(object_flags);
 
     // put together the request params
     postparams = {
       _xsrf:_xsrf,
+      objectid: objectid,
+      comment_text:comment_text,
+      user_flags:object_flags
     };
 
-    // get the rest of the postparams from the controls
-
     // fire the request to the backend
+    $.post(posturl, postparams, function (data) {
+
+      let status = data.status;
+      let message = data.message;
+
+      // update the object info
+      if (status == 'ok') {
+        review.get_object(objectid);
+      }
+
+      else {
+        ui.alert_box(message, "danger");
+      }
+
+    }, 'json').fail(function (xhr) {
+      ui.alert_box("Could not update this object.", "danger");
+    });
 
   }
 

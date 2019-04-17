@@ -130,11 +130,13 @@
       </div>
 
       <!-- control row -->
-      <div class="row" >
+      <!-- this contains the source index and notes -->
+      <form id="comment-form" method="post">
+        {% module xsrf_form_html() %}
+        <div class="row" >
 
-        <!-- this contains the source index and notes -->
-        <div class="col-sm-12 col-md-9" >
-          <form>
+          <div class="col-sm-12 col-md-9" >
+
             <div class="form-group">
               <label for="object-notes">Notes on this object</label>
               <textarea class="form-control" id="object-notes" rows="5"
@@ -146,20 +148,23 @@
                     id="save-current-object">
               Save notes and classification
             </button>
-          </form>
-        </div>
 
-        <div class="col-sm-12 col-md-3" >
+          </div>
 
-          <h4>Object flags</h4>
+          <div class="col-sm-12 col-md-3" >
 
-          <div id="flag-checkbox-group" class="mt-2">
+            <h4>Object flags</h4>
+
+            <div id="flag-checkbox-group" class="mt-2">
+
+            </div>
 
           </div>
 
         </div>
 
-      </div>
+      </form>
+
 
       <!-- this contains the extra columns -->
       <div class="row mt-4" >
@@ -211,27 +216,9 @@
 
           <div class="all-object-comments" >
 
-            <div class="card mb-3 mx-1">
-              <div class="card-header">
-                Someone else (minutes ago)
-              </div>
-              <div class="card-body">
-                <p>Nil Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
-                  posuere erat a ante.</p>
-              </div>
-            </div>
-
-            <div class="card mb-3 mx-1">
-              <div class="card-header">
-                Someone (hours ago)
-              </div>
-              <div class="card-body">
-                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
-                  posuere erat a ante.</p>
-              </div>
-            </div>
 
           </div>
+
         </div>
       </div>
 

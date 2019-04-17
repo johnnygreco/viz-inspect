@@ -560,7 +560,7 @@ def main():
           'ratelimit':RATELIMIT,
           'cachedir':CACHEDIR}),
 
-        (r'/api/save-object/(\d{1,10})/(comments|flags)',
+        (r'/api/save-object/(\d{1,10})',
          actions.SaveObjectHandler,
          {'currentdir':CURRENTDIR,
           'templatepath':TEMPLATEPATH,

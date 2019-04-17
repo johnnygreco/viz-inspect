@@ -66,6 +66,9 @@ except Exception as e:
 from sqlalchemy import select, update
 from sqlalchemy.dialects import postgresql as pg
 
+import markdown
+import bleach
+
 from .database import get_postgres_db, json_dumps
 
 
@@ -548,8 +551,10 @@ def insert_object_comments(userid,
                            dbinfo,
                            username=None,
                            dbkwargs=None):
-    '''
-    This inserts a comment for the object.
+    '''This inserts a comment for the object.
+
+    Markdown is allowed in the comment text. The comment text will be run
+    through bleach to remove harmful bits.
 
     Parameters
     ----------
@@ -625,6 +630,15 @@ def insert_object_comments(userid,
         comment_text = comments['comment']
         user_flags = comments['user_flags']
 
+        # 1. bleach the comment
+        cleaned_comment = bleach.clean(comment_text, strip=True)
+
+        # 2. markdown render the comment
+        rendered_comment = markdown.markdown(
+            cleaned_comment,
+            output_format='html5',
+        )
+
         # prepare the insert
         insert = pg.insert(
             object_comments
@@ -635,7 +649,7 @@ def insert_object_comments(userid,
              'userid':userid,
              'username':username,
              'user_flags':user_flags,
-             'contents':comment_text}
+             'contents':rendered_comment}
         )
         conn.execute(insert)
 

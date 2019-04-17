@@ -573,7 +573,7 @@ class LoadObjectHandler(BaseHandler):
 
 
 class SaveObjectHandler(BaseHandler):
-    '''This handles the /api/save-object/<objectid>/<comments|flags> endpoint.
+    '''This handles the /api/save-object/<objectid> endpoint.
 
     '''
 
@@ -610,18 +610,135 @@ class SaveObjectHandler(BaseHandler):
 
 
     @gen.coroutine
-    def post(self, savetype):
-        '''This handles POST requests to /api/save-object/<comment|flag>.
+    def post(self, objectid):
+        '''This handles POST requests to /api/save-object/<objectid>.
 
-        This only saves the current object.
+        This saves the current object.
 
         '''
 
-        self.render(
-            'index.html',
-            flash_messages=self.render_flash_messages(),
-            user_account_box=self.render_user_account_box(),
-            page_title='viz-inspect',
-            siteinfo=self.siteinfo,
-            current_user=self.current_user,
-        )
+        # check if we're actually logged in
+        if not self.current_user:
+            retdict = {'status':'failed',
+                       'message':'You must be logged in to view objects.',
+                       'result': None}
+            self.set_status(401)
+            self.write(retdict)
+            raise web.Finish()
+
+        # if the current user is anonymous or locked, ignore their request
+        if self.current_user and self.current_user['user_role'] in ('anonymous',
+                                                                    'locked'):
+            retdict = {'status':'failed',
+                       'message':'You must be logged in to view objects.',
+                       'result': None}
+            self.set_status(401)
+            self.write(retdict)
+            raise web.Finish()
+
+        # check the POST request for validity
+        if ((not self.keycheck['status'] == 'ok') or
+            (not self.xsrf_type == 'session')):
+
+            self.set_status(403)
+            retdict = {
+                'status':'failed',
+                'result':None,
+                'message':("Sorry, you don't have access. "
+                           "API keys are not allowed for this endpoint.")
+            }
+            self.write(retdict)
+            raise web.Finish()
+
+
+        try:
+
+            objectid = int(xhtml_escape(objectid))
+            comment_text = self.get_argument('comment_text',None)
+            user_flags = self.get_argument('user_flags',None)
+            userid = self.current_user['user_id']
+            username = self.current_user['full_name']
+
+            if comment_text is not None and len(comment_text.strip()) == 0:
+                comment_text = ''
+
+            if comment_text is not None or user_flags is not None:
+
+                # check if the user is allowed to comment on this object
+                objectinfo = yield self.executor.submit(
+                    worker_get_object,
+                    objectid,
+                    self.basedir,
+                    userid,
+                )
+
+                # if this object actually exists and is writable, we can do
+                # stuff on it
+                if objectinfo is not None and not objectinfo['readonly']:
+
+                    commentdict = {'objectid':objectid,
+                                   'comment':comment_text,
+                                   'user_flags':json.loads(user_flags)}
+
+                    updated = yield self.executor.submit(
+                        worker_insert_object_comments,
+                        userid,
+                        username,
+                        commentdict,
+                    )
+
+                    if updated is not None:
+
+                        retdict = {'status':'ok',
+                                   'message':'object updated OK',
+                                   'result':updated}
+                        self.write(retdict)
+                        self.finish()
+
+                    else:
+
+                        retdict = {
+                            'status':'failed',
+                            'message':(
+                                "Object with specified ID "
+                                "could not be updated."
+                            ),
+                            'result':None
+                        }
+                        self.write(retdict)
+                        self.finish()
+
+                else:
+
+                    retdict = {'status':'failed',
+                               'message':(
+                                   "Object not found, or is not in your "
+                                   "list of objects to review. "
+                                   "Your comments were not saved."
+                               ),
+                               'result':None}
+                    self.write(retdict)
+                    raise web.Finish()
+
+            # if no comment text was supplied, do nothing
+            else:
+
+                retdict = {
+                    'status':'ok',
+                    'message':'No comments supplied. Object is unchanged.',
+                    'result': None
+                }
+                self.write(retdict)
+                self.finish()
+
+
+        except Exception as e:
+
+            LOGGER.exception('failed to save changes for object ID: %r' %
+                             objectid)
+            self.set_status(400)
+            retdict = {'status':'failed',
+                       'message':'Invalid save request for object ID',
+                       'result':None}
+            self.write(retdict)
+            self.finish()
