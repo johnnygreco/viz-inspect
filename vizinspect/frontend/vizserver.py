@@ -346,12 +346,26 @@ def main():
                         "image directory to load HUGS images from.")
             image_dir = input("HUGS image directory location: ")
 
+        # 3. confirm the database_url in the site-info.json file
+        LOGGER.info('Please confirm the database URL '
+                    'used to connect to the posgresql server.')
+        database_url = input("Database URL [default: %s]: " %
+                             SITEINFO['database_url'])
+        if not database_url or len(database_url.strip()) == 0:
+            set_database_url = SITEINFO['database_url']
+        else:
+            set_database_url = database_url
+            SITEINFO['database_url'] = set_database_url
+
+        # update the site-info.json file
+        with open(siteinfojson,'w') as outfd:
+            json.dump(SITEINFO, infd, indent=2)
 
         # now we have the catalog CSV and image dir
         # load the objects into the DB
         from ..backend import database, catalogs
         try:
-            database.new_vizinspect_db(SITEINFO['database_url'],
+            database.new_vizinspect_db(set_database_url,
                                        database.VIZINSPECT)
         except Exception as e:
             LOGGER.warning("The required tables already exist. "
@@ -362,7 +376,7 @@ def main():
         loaded = catalogs.load_catalog(
             catalog_path,
             image_dir,
-            (SITEINFO['database_url'],
+            (set_database_url,
              database.VIZINSPECT),
             flags_to_use=options.flagkeys.split(','))
 
