@@ -490,7 +490,7 @@ var review = {
 
         review.objectlist = result.objectlist;
         review.objectlist_start_keyid = result.start_keyid;
-        review.objectlist_end_keyid = result.start_keyid;
+        review.objectlist_end_keyid = result.end_keyid;
 
         $('#objectid-list').empty();
 
