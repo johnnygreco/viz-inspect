@@ -196,12 +196,13 @@ def load_catalog(catalog_fpath,
 
         LOGINFO("Inserting object image file paths...")
 
+        print(main_cols)
         # look up the images for each object
         object_images = [
             os.path.join(
                 images_dpath,
                 object_imagefile_pattern.format(
-                    objectid=x['objectid']
+                    objectid=int(x['objectid'])
                 )
             ) for x in main_cols
         ]
