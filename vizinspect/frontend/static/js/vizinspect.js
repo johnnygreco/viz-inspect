@@ -598,7 +598,7 @@ var review = {
         $('#current-objectid-val').html(objectinfo.objectid);
         $('#current-ra-val').html(objectinfo.ra);
         $('#current-dec-val').html(objectinfo.dec);
-        $('#current-reff-val').html(objectinfo.extra_columns['r_e'].toPrecision(4));
+        $('#current-reff-val').html(objectinfo.extra_columns['r_e'].toPrecision(2));
         $('#current-mug0-val').html(
           objectinfo.extra_columns['mu_e_ave_forced_g'].toPrecision(4)
         );
