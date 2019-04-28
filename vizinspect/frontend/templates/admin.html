@@ -50,7 +50,7 @@
     <div class="tab-pane show active" id="email-settings"
          role="tabpanel" aria-labelledby="email-settings-tab">
 
-      <form action="/admin/email" method="post" id="admin-email-update-form">
+      <form class="mt-4" action="/admin/email" method="post" id="admin-email-update-form">
         {% module xsrf_form_html() %}
 
         <fieldset>
@@ -160,16 +160,16 @@
 
         </fieldset>
 
-        <fieldset>
+        <fieldset class="mt-2">
           <legend>Email addresses that are allowed to sign up</legend>
 
           <div class="form-group" >
-            <label for="admin-allowed-email-addrs" >Type in email addresses separated by line breaks</label>
-            <textarea id="admin-allowed-email-addrs" class="form-control" name="allowedemailaddr" rows="10">
-            {% for addr in siteinfo['allowed_user_emailaddr'] %}
-            {{ addr.strip('\n').strip() }}
-            {% end %}
-            </textarea>
+            <label for="admin-allowed-email-addrs" >Type in email addresses separated by commas</label>
+            <input type="text" class="form-control"
+                   name="allowedemailaddr" id="admin-allowed-email-addrs"
+                   placeholder="user1@example.edu, user2@example.edu, user3@example.edu"
+                   minlength="5" maxlength="2048"
+                   value="{{ ', '.join(siteinfo['allowed_user_emailaddr']) }}">
           </div>
 
         </fieldset>
@@ -187,7 +187,7 @@
     <div class="tab-pane" id="user-settings"
          role="tabpanel" aria-labelledby="user-settings-tab">
 
-      <form id="admin-users-update-form">
+      <form class="mt-4" id="admin-users-update-form">
         {% module xsrf_form_html() %}
 
         {% for item in userlist %}
@@ -303,7 +303,7 @@
          id="review-assignments" role="tabpanel"
          aria-labelledby="review-assignments-tab">
 
-      <form action="/admin/review-assign" method="post" id="admin-review-assign-update-form">
+      <form class="mt-4" action="/admin/review-assign" method="post" id="admin-review-assign-update-form">
         {% module xsrf_form_html() %}
 
 
