@@ -230,6 +230,7 @@ def main():
     from . import auth_handlers as ah
     from . import indexhandlers as ih
     from . import actionhandlers as actions
+    from . import admin_handlers as admin
 
 
     ###################
@@ -669,7 +670,7 @@ def main():
           'ratelimit':RATELIMIT,
           'cachedir':CACHEDIR}),
 
-        # this is user-prefs page
+        # this is the user-prefs page
         (r'/users/home',
          ah.UserHomeHandler,
          {'fernetkey':FERNETSECRET,
@@ -680,12 +681,64 @@ def main():
           'ratelimit':RATELIMIT,
           'cachedir':CACHEDIR}),
 
-        # this is user-delete page
+        # this is the user-delete page
         (r'/users/delete',
          ah.DeleteUserHandler,
          {'fernetkey':FERNETSECRET,
           'executor':EXECUTOR,
           'authnzerver':AUTHNZERVER,
+          'session_expiry':SESSION_EXPIRY,
+          'siteinfo':SITEINFO,
+          'ratelimit':RATELIMIT,
+          'cachedir':CACHEDIR}),
+
+        ####################
+        ## ADMIN HANDLERS ##
+        ####################
+
+        # this is the admin index page
+        (r'/admin',
+         admin.AdminIndexHandler,
+         {'fernetkey':FERNETSECRET,
+          'executor':EXECUTOR,
+          'authnzerver':AUTHNZERVER,
+          'basedir':BASEDIR,
+          'session_expiry':SESSION_EXPIRY,
+          'siteinfo':SITEINFO,
+          'ratelimit':RATELIMIT,
+          'cachedir':CACHEDIR}),
+
+        # this handles email settings updates
+        (r'/admin/email',
+         admin.EmailSettingsHandler,
+         {'fernetkey':FERNETSECRET,
+          'executor':EXECUTOR,
+          'authnzerver':AUTHNZERVER,
+          'basedir':BASEDIR,
+          'session_expiry':SESSION_EXPIRY,
+          'siteinfo':SITEINFO,
+          'ratelimit':RATELIMIT,
+          'cachedir':CACHEDIR}),
+
+        # this handles user updates
+        (r'/admin/users',
+         admin.UserAdminHandler,
+         {'fernetkey':FERNETSECRET,
+          'executor':EXECUTOR,
+          'authnzerver':AUTHNZERVER,
+          'basedir':BASEDIR,
+          'session_expiry':SESSION_EXPIRY,
+          'siteinfo':SITEINFO,
+          'ratelimit':RATELIMIT,
+          'cachedir':CACHEDIR}),
+
+        # this handles review assignments
+        (r'/admin/review-assign',
+         admin.ReviewAssignmentHandler,
+         {'fernetkey':FERNETSECRET,
+          'executor':EXECUTOR,
+          'authnzerver':AUTHNZERVER,
+          'basedir':BASEDIR,
           'session_expiry':SESSION_EXPIRY,
           'siteinfo':SITEINFO,
           'ratelimit':RATELIMIT,
