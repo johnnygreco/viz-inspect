@@ -262,35 +262,6 @@ var ui = {
   },
 
 
-  // this saves UI prefs on the user home page to the vizinspect_prefs cookie
-  save_prefs_cookie: function () {
-
-    let always_email = $('#prefs-email-when-done').prop('checked');
-
-    let default_visibility = $('[name="prefs-dataset-visibility"]')
-        .filter(':checked').attr('id');
-
-    if (default_visibility === undefined) {
-      default_visibility = null;
-    }
-
-    let cookie_settings = {
-      expires: ui.prefs_cookie_expires_days
-    };
-    if (ui.prefs_cookie_secure) {
-      cookie_settings.secure = true;
-    }
-
-    Cookies.set('vizinspect_prefs',
-                {always_email: always_email,
-                 default_visibility: default_visibility},
-                cookie_settings);
-
-    ui.alert_box('Your preferences have been saved.','primary');
-
-  },
-
-
   // this loads UI preferences from the vizinspect_prefs cookie
   // target is one of 'main-page', 'prefs-page' to switch between the controls
   // to set
@@ -310,18 +281,29 @@ var ui = {
     /////////////////////////
 
     // bind the cookie setters
-    $('#prefs-save').on('click', function(evt) {
-      ui.save_prefs_cookie();
+    $('#pref-autosave-next').on('click', function(evt) {
+
+      let autojump = $(this).prop('checked');
+
+      // get the previous cookie settings
+      let prefs = ui.load_cookie_prefs();
+
+      if (prefs !== undefined) {
+        prefs.autosave_jump = autojump;
+      }
+      else {
+        prefs = { autosave_jump: autojump };
+      }
+
+      // set the prefs
+      ui.prefs = prefs;
+      Cookies.set('vizinspect_prefs', prefs);
+
     });
 
     // delete the API key on session end
     $('#user-logout-form').on('submit', function(evt) {
       localStorage.clear();
-    });
-
-    // bind the apikey generate button
-    $('#prefs-generate-apikey').on('click', function(evt) {
-      ui.generate_new_apikey('#api-key','#apikey-expiry');
     });
 
     //////////////////////
@@ -439,6 +421,25 @@ var ui = {
     //////////////////////////////////
     // COMMENT FORM SUBMIT BINDINGS //
     //////////////////////////////////
+
+    // bind the click event for the flag buttons
+    $('#comment-form').on('click', '.object-flags-button', function (evt) {
+
+      if (ui.prefs.autosave_jump !== undefined && ui.prefs.autosave_jump === true) {
+
+        // set the state of this button
+        $(this).attr('data-state','active');
+
+        // get the current objectid
+        let this_objectid = review.current_objectid;
+
+        // fire the save object handler
+        ui.debounce(review.save_object_comments_flags(this_objectid, true), 250);
+
+      }
+
+    });
+
 
     // bind the form submit for the review
     $('#comment-form').on('submit', function (event) {
@@ -618,34 +619,47 @@ var review = {
         }
 
         // clean out the flag button group
-        $('#flag-checkbox-group').empty();
+        $('#flag-button-group').empty();
 
         // update the flags button group
         for (let item in objectinfo.user_flags) {
 
-          let checked = objectinfo.user_flags[item];
-          let checkbox_checked = '';
-          if (checked) {
-            checkbox_checked = 'checked';
+          let color = 'info';
+
+          if (item == 'candy') {
+            color = 'primary';
           }
-          let checkbox_disabled = '';
+          else if (item == 'junk') {
+            color = 'danger';
+          }
+          else if (item == 'cirrus') {
+            color = 'warning';
+          }
+          else if (item == 'unknown') {
+            color = 'dark';
+          }
+
+          let checked = objectinfo.user_flags[item];
+          let button_activated = '';
+          if (checked) {
+            button_activated = 'active';
+          }
+          let button_disabled = '';
           if (review.current_readonly) {
-            checkbox_disabled = 'disabled';
-            $('#flag-checkbox-group').append(
+            button_disabled = 'disabled';
+            $('#flag-button-group').append(
               "<p>This object is not in your review " +
-                "assigment so it has been marked as <em>read-only</em>.</p>"
+                "assignment so it has been marked as <em>read-only</em>.</p>"
             );
           }
 
           let thisrow = `
-<div class="custom-control custom-checkbox">
-  <input type="checkbox"
-         class="custom-control-input object-flags-check"
-         value="${item}"
-         id="check-${item}" ${checkbox_checked} ${checkbox_disabled}>
-  <label class="custom-control-label" for="check-${item}">${item}</label>
-</div>`;
-          $('#flag-checkbox-group').append(thisrow);
+<button type="button" data-state="${button_activated}" data-value="${item}" data-toggle="button" autocomplete="off"
+id="check-${item}" class="mx-1 btn btn-${color} object-flags-button ${button_activated}" ${button_disabled}>
+${item}
+</button>`;
+
+          $('#flag-button-group').append(thisrow);
 
         }
 
@@ -723,7 +737,7 @@ var review = {
   },
 
 
-  save_object_comments_flags: function (objectid) {
+  save_object_comments_flags: function (objectid, jump_to_next) {
 
     let _xsrf;
     let posturl = `/api/save-object/${objectid}`;
@@ -737,9 +751,17 @@ var review = {
 
     // get the flags
     let object_flags = {};
-    for (let item of $('.object-flags-check')) {
-      object_flags[item.value] = item.checked;
+    for (let item of $('.object-flags-button')) {
+      if (item.dataset.state == 'active' || item.className.indexOf('active') != -1) {
+        object_flags[item.dataset.value] = true;
+      }
+
+      else {
+        object_flags[item.dataset.value] = false;
+      }
+
     }
+
     object_flags = JSON.stringify(object_flags);
 
     // put together the request params
@@ -757,15 +779,44 @@ var review = {
       let message = data.message;
 
       // update the object info
-      if (status == 'ok') {
+      if (status == 'ok' && (jump_to_next === undefined)) {
         review.get_object(objectid);
       }
 
-      else {
+      else if (status != 'ok') {
         ui.alert_box(message, "danger");
       }
 
-    }, 'json').fail(function (xhr) {
+    }, 'json').done(function () {
+
+      // update the object list
+      let objectlist_reviewtype = $('#objectlist-pref-select').val();
+      review.get_object_list(
+        objectlist_reviewtype,
+        review.objectlist_start_keyid,
+        review.objectlist_end_keyid
+      );
+
+    }).done(function () {
+
+      // jump to the next object if told to do so
+      if (jump_to_next !== undefined && jump_to_next === true) {
+
+        // find the previous object in the objectlist
+        let this_object_index = review.objectlist.indexOf(objectid);
+
+        // only move if the current object is not at the end of the list
+        if (this_object_index != (review.objectlist.length-1)) {
+
+          let next_objectid = review.objectlist[this_object_index+1];
+          review.get_object(next_objectid);
+
+        }
+
+      }
+
+
+    }).fail(function (xhr) {
       ui.alert_box("Could not update this object.", "danger");
     });
 

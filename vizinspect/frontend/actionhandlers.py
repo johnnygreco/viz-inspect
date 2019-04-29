@@ -435,7 +435,7 @@ class ObjectListHandler(BaseHandler):
             end_keyid = xhtml_escape(self.get_argument('end_keyid', '50'))
 
             start_keyid = int(start_keyid)
-            if end_keyid == 'none':
+            if end_keyid in ('none', 'null'):
                 end_keyid = None
             else:
                 end_keyid = int(end_keyid)

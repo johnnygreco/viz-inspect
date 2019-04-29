@@ -135,7 +135,7 @@
         {% module xsrf_form_html() %}
         <div class="row" >
 
-          <div class="col-sm-12 col-md-8" >
+          <div class="col-sm-12 col-md-7" >
 
             <div class="form-group">
               <label for="object-notes">Notes on this object</label>
@@ -151,11 +151,18 @@
 
           </div>
 
-          <div class="col-sm-12 col-md-4" >
+          <div class="col-sm-12 col-md-5" >
 
             <h4>Object flags</h4>
 
-            <div id="flag-checkbox-group" class="mt-2">
+            <div class="custom-control custom-checkbox mb-4">
+              <input type="checkbox" class="custom-control-input" id="pref-autosave-next">
+              <label class="custom-control-label" for="pref-autosave-next">
+                Save &amp; jump to next object when flag is set
+              </label>
+            </div>
+
+            <div id="flag-button-group" class="mt-2 d-flex">
 
             </div>
 
@@ -291,7 +298,11 @@
     ui.action_setup();
 
     // load the user prefs
-    ui.load_cookie_prefs('main-page');
+    ui.prefs = ui.load_cookie_prefs();
+
+    if (ui.prefs.autosave_jump == true) {
+      $('#pref-autosave-next').prop('checked',true);
+    }
 
     {% if current_user['user_role'] in ('authenticated','staff','superuser') %}
 
