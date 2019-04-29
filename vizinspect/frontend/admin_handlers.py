@@ -311,7 +311,9 @@ class EmailSettingsHandler(BaseHandler):
                 if allowed_email_addrs is not None:
                     allowed_email_addrs = squeeze(
                         xhtml_escape(allowed_email_addrs)
-                    ).split('\n')
+                    ).split(',')
+                    allowed_email_addrs = [x.strip() for
+                                           x in allowed_email_addrs]
                 else:
                     allowed_email_addrs = []
 
@@ -616,69 +618,3 @@ class UserAdminHandler(BaseHandler):
             }
             self.write(retdict)
             raise tornado.web.Finish()
-
-
-
-class ReviewAssignmentHandler(BaseHandler):
-    '''
-    This handles /admin/review-assign.
-
-    '''
-
-    def initialize(self,
-                   fernetkey,
-                   executor,
-                   authnzerver,
-                   basedir,
-                   session_expiry,
-                   siteinfo,
-                   ratelimit,
-                   cachedir):
-        '''
-        This just sets up some stuff.
-
-        '''
-
-        self.authnzerver = authnzerver
-        self.fernetkey = fernetkey
-        self.ferneter = Fernet(fernetkey)
-        self.executor = executor
-        self.session_expiry = session_expiry
-        self.httpclient = AsyncHTTPClient(force_instance=True)
-        self.siteinfo = siteinfo
-        self.ratelimit = ratelimit
-        self.cachedir = cachedir
-        self.basedir = basedir
-
-        # initialize this to None
-        # we'll set this later in self.prepare()
-        self.current_user = None
-
-        # apikey verification info
-        self.apikey_verified = False
-        self.apikey_info = None
-
-
-    @gen.coroutine
-    def post(self):
-        '''This handles the POST to /admin/review-assign.
-
-        '''
-        if not self.current_user:
-            self.redirect('/')
-
-        if ((not self.keycheck['status'] == 'ok') or
-            (not self.xsrf_type == 'session')):
-
-            self.set_status(403)
-            retdict = {
-                'status':'failed',
-                'result':None,
-                'message':("Sorry, you don't have access. "
-                           "API keys are not allowed for this endpoint.")
-            }
-            self.write(retdict)
-            raise tornado.web.Finish()
-
-        # get the current user
-        current_user = self.current_user

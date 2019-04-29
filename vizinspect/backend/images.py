@@ -179,7 +179,7 @@ def make_main_plot(
 
     # get the info from the database
     full_catalog, start_keyid, end_keyid = (
-        get_objects(dbinfo, allinfo=True, end_keyid=None)
+        get_objects(dbinfo, getinfo='all', end_keyid=None)
     )
 
     gi_color = np.array([x['extra_columns']['g-i'] for x in full_catalog])

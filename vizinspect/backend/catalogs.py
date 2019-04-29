@@ -358,7 +358,7 @@ def get_objects(
         userid=None,
         start_keyid=0,
         end_keyid=50,
-        allinfo=False,
+        getinfo='objectids',
         dbkwargs=None
 ):
     '''This is used to get object lists filtering on either userids or review
@@ -393,9 +393,11 @@ def get_objects(
         If set, sets the current userid to use in the filters when review_status
         is one of the -self, -other values.
 
-    allinfo: bool
-        If True, returns all of the object info. If False, returns only the
-        objectids matching the specified criteria.
+    getinfo: {'objectids','review-assignments','all'}
+        If 'objectids', returns only the objectids matching the specified
+        criteria. If 'review-assignments', returns the objectids and a list of
+        userids assigned to review each object. If 'all', returns all info per
+        object.
 
     dbkwargs : dict or None
         A dict of kwargs to pass to the database open function.
@@ -442,7 +444,7 @@ def get_objects(
 
     join = object_catalog.join(object_images).outerjoin(object_comments)
 
-    if allinfo:
+    if getinfo == 'all':
 
         sel = select(
             [object_catalog.c.id.label('keyid'),
@@ -461,6 +463,13 @@ def get_objects(
         ).select_from(
             join
         )
+
+    elif getinfo == 'objectids':
+        sel = select([object_catalog.c.objectid]).select_from(join)
+
+    elif getinfo == 'review-assignments':
+        sel = select([object_catalog.c.objectid,
+                      object_catalog.c.reviewer_userid]).select_from(join)
 
     else:
         sel = select([object_catalog.c.objectid]).select_from(join)
@@ -498,6 +507,14 @@ def get_objects(
             object_catalog.c.reviewer_userid == userid
         ).where(
             object_comments.c.added == None
+        )
+    elif review_status == 'assigned-all':
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid != None
+        )
+    elif review_status == 'unassigned-all':
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid == None
         )
     else:
         actual_sel = sel
@@ -761,3 +778,93 @@ def update_object_flags(objectid,
         engine.dispose()
 
     return objectinfo
+
+
+#######################
+## ASSIGNING OBJECTS ##
+#######################
+
+def update_review_assignments(objectid_list,
+                              reviewer_userid,
+                              dbinfo,
+                              dbkwargs=None):
+    '''
+    This updates review assignments for a list of objectids
+
+
+    Parameters
+    ----------
+
+    objectid_list : list of ints
+        The objectids of the object being updated.
+
+    reviewer_userid : int
+        The userid of the reviewer.
+
+    dbinfo : tuple
+        This is a tuple of two items:
+
+        - the database URL or the connection instance to use
+        - the database metadata object
+
+        If the database URL is provided, a new engine will be used. If the
+        connection itself is provided, it will be re-used.
+
+    dbkwargs : dict or None
+        A dict of kwargs to pass to the database open function.
+
+    Returns
+    -------
+
+    dict
+        Returns all of the object's info as a dict.
+
+    '''
+
+    #
+    # get the database
+    #
+    dbref, dbmeta = dbinfo
+    if not dbkwargs:
+        dbkwargs = {}
+    if isinstance(dbref, str) and 'postgres' in dbref:
+        if not dbkwargs:
+            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
+        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
+            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
+        elif dbkwargs and 'engine_kwargs' in dbkwargs:
+            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
+        engine, conn, meta = get_postgres_db(dbref,
+                                             dbmeta,
+                                             **dbkwargs)
+    elif isinstance(dbref, str) and 'postgres' not in dbref:
+        raise NotImplementedError(
+            "viz-inspect currently doesn't support non-Postgres databases."
+        )
+    else:
+        engine, conn, meta = None, dbref, dbmeta
+        meta.bind = conn
+    #
+    # end of database get
+    #
+
+    # prepare the tables
+    object_catalog = meta.tables['object_catalog']
+
+    upd = update(object_catalog).where(
+        object_catalog.c.objectid in list(objectid_list)
+    ).values(
+        {'reviewer_userid':reviewer_userid}
+    )
+
+    with conn.begin():
+        conn.execute(upd)
+
+    # close everything down if we were passed a database URL only and had to
+    # make a new engine
+    if engine:
+        conn.close()
+        meta.bind = None
+        engine.dispose()
+
+    return True

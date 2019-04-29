@@ -28,6 +28,8 @@ from cryptography.fernet import Fernet
 # we need this to send objects with the following types to the frontend:
 # - bytes
 # - ndarray
+# - datetime
+# - set
 import json
 
 class FrontendEncoder(json.JSONEncoder):
@@ -36,6 +38,8 @@ class FrontendEncoder(json.JSONEncoder):
 
         if isinstance(obj, np.ndarray):
             return obj.tolist()
+        elif isinstance(obj, set):
+            return list(obj)
         elif isinstance(obj, datetime):
             return obj.isoformat()
         elif isinstance(obj, bytes):
@@ -74,6 +78,7 @@ from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.escape import xhtml_escape
 from tornado import web
+
 
 ###################
 ## LOCAL IMPORTS ##
@@ -178,11 +183,13 @@ def worker_get_object(objectid, basedir, userid):
         return None
 
 
-def worker_get_objects(review_status='all',
-                       userid=None,
-                       start_keyid=0,
-                       end_keyid=50,
-                       allinfo=False):
+def worker_get_objects(
+        review_status='all',
+        userid=None,
+        start_keyid=0,
+        end_keyid=50,
+        getinfo='objectids'
+):
     '''
     This returns the full object list.
 
@@ -200,7 +207,7 @@ def worker_get_objects(review_status='all',
             userid=userid,
             start_keyid=start_keyid,
             end_keyid=end_keyid,
-            allinfo=allinfo
+            getinfo=getinfo
         )
 
         # reform to a single list
@@ -320,11 +327,81 @@ def worker_export_catalog(
     '''
 
 
+def worker_list_review_assignments(
+        userid=None,
+        start_keyid=0,
+        end_keyid=50,
+):
+    '''
+    This lists review assignments.
+
+    '''
+
+    try:
+
+        currproc = mp.current_process()
+        conn, meta = currproc.connection, currproc.metadata
+
+        (unassigned_objects,
+         unassigned_start_keyid,
+         unassigned_end_keyid) = catalogs.get_objects(
+             (conn, meta),
+             review_status='unassigned-all',
+             userid=None,
+             start_keyid=start_keyid,
+             end_keyid=end_keyid,
+             getinfo='objectids'
+        )
+
+        (assigned_objects,
+         assigned_start_keyid,
+         assigned_end_keyid) = catalogs.get_objects(
+             (conn, meta),
+             review_status='assigned-all',
+             userid=None,
+             start_keyid=start_keyid,
+             end_keyid=end_keyid,
+             getinfo='review-assignments'
+        )
+
+        unassigned_objects = list(set([x['objectid']
+                                       for x in unassigned_objects]))
+
+        assigned_objectdict = {}
+        for x in assigned_objects:
+
+            if x['reviewer_userid'] not in assigned_objectdict:
+
+                assigned_objectdict[x['reviewer_userid']] = {x['objectid']}
+
+            else:
+
+                assigned_objectdict[x['reviewer_userid']].add(
+                    x['objectid']
+                )
+
+        # this is the dict we return
+        retdict = {
+            'unassigned_objects': unassigned_objects,
+            'unassigned_start_keyid':unassigned_start_keyid,
+            'unassigned_end_keyid':unassigned_end_keyid,
+            'assigned_objects':assigned_objectdict,
+            'assigned_start_keyid':assigned_start_keyid,
+            'assigned_end_keyid':assigned_end_keyid,
+        }
+
+        return retdict
+
+    except Exception as e:
+        LOGGER.exception("Could not get object list.")
+        return None
+
+
+
 
 #####################
 ## OBJECT HANDLERS ##
 #####################
-
 
 class ObjectListHandler(BaseHandler):
     '''
@@ -446,7 +523,7 @@ class ObjectListHandler(BaseHandler):
                 userid=self.current_user['user_id'],
                 start_keyid=start_keyid,
                 end_keyid=end_keyid,
-                allinfo=False
+                getinfo='objectids',
             )
 
             if objectlist_info is not None:
@@ -754,3 +831,117 @@ class SaveObjectHandler(BaseHandler):
                        'result':None}
             self.write(retdict)
             self.finish()
+
+
+
+class ReviewAssignmentHandler(BaseHandler):
+    '''
+    This handles /api/review-assign.
+
+    '''
+
+    def initialize(self,
+                   fernetkey,
+                   executor,
+                   authnzerver,
+                   basedir,
+                   session_expiry,
+                   siteinfo,
+                   ratelimit,
+                   cachedir):
+        '''
+        This just sets up some stuff.
+
+        '''
+
+        self.authnzerver = authnzerver
+        self.fernetkey = fernetkey
+        self.ferneter = Fernet(fernetkey)
+        self.executor = executor
+        self.session_expiry = session_expiry
+        self.httpclient = AsyncHTTPClient(force_instance=True)
+        self.siteinfo = siteinfo
+        self.ratelimit = ratelimit
+        self.cachedir = cachedir
+        self.basedir = basedir
+
+        # initialize this to None
+        # we'll set this later in self.prepare()
+        self.current_user = None
+
+        # apikey verification info
+        self.apikey_verified = False
+        self.apikey_info = None
+
+
+    @gen.coroutine
+    def get(self):
+        '''
+        This shows the admin page.
+
+        '''
+
+        if not self.current_user:
+            self.redirect('/users/login')
+
+        current_user = self.current_user
+
+        # only allow in superuser roles
+        if current_user and current_user['user_role'] == 'superuser':
+
+            # get the review assignments
+
+
+            # ask the authnzerver for a user list
+            reqtype = 'user-list'
+            reqbody = {'user_id': None}
+
+            ok, resp, msgs = yield self.authnzerver_request(
+                reqtype, reqbody
+            )
+
+            if not ok:
+
+                LOGGER.error('no user list returned from authnzerver')
+                user_list = []
+
+            else:
+                user_list = resp['user_info']
+
+            self.render('admin.html',
+                        flash_messages=self.render_flash_messages(),
+                        user_account_box=self.render_user_account_box(),
+                        page_title="Server admin",
+                        siteinfo=self.siteinfo,
+                        userlist=user_list)
+
+
+        # anything else is probably the locked user, turn them away
+        else:
+            self.render_blocked_message()
+
+
+
+    @gen.coroutine
+    def post(self):
+        '''This handles the POST to /admin/review-assign.
+
+        '''
+        if not self.current_user:
+            self.redirect('/')
+
+        if ((not self.keycheck['status'] == 'ok') or
+            (not self.xsrf_type == 'session')):
+
+            self.set_status(403)
+            retdict = {
+                'status':'failed',
+                'result':None,
+                'message':("Sorry, you don't have access. "
+                           "API keys are not allowed for this endpoint.")
+            }
+            self.write(retdict)
+            raise web.Finish()
+
+        # get the current user
+        current_user = self.current_user
