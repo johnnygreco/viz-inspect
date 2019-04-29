@@ -34,6 +34,38 @@ def recv_sigint(signum, stack):
     '''
     raise KeyboardInterrupt
 
+import numpy as np
+
+class FrontendEncoder(json.JSONEncoder):
+    '''
+    This handles encoding weird things.
+
+    '''
+
+    def default(self, obj):
+
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, set):
+            return list(obj)
+        elif isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, bytes):
+            return obj.decode()
+        elif isinstance(obj, complex):
+            return (obj.real, obj.imag)
+        elif (isinstance(obj, (float, np.float64, np.float_)) and
+              not np.isfinite(obj)):
+            return None
+        elif isinstance(obj, (np.int8, np.int16, np.int32, np.int64)):
+            return int(obj)
+        else:
+            return json.JSONEncoder.default(self, obj)
+
+# this replaces the default encoder and makes it so Tornado will do the right
+# thing when it converts dicts to JSON when a
+# tornado.web.RequestHandler.write(dict) is called.
+json._default_encoder = FrontendEncoder()
 
 
 #####################

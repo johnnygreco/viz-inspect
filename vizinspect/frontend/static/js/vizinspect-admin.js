@@ -8,6 +8,87 @@
 
 */
 
+var assignments = {
+
+  unassigned_objects: [],
+  unassigned_start_keyid: 0,
+  unassigned_end_keyid: null,
+  assigned_objects: [],
+  assigned_start_keyid: 0,
+  assigned_end_keyid: null,
+
+  // this fetches the lists of assigned and unassigned objects
+  review_assignment_lists: function (start_keyid, end_keyid) {
+
+    let url = `/api/review-assign?start_keyid=${start_keyid}&end_keyid=${end_keyid}`;
+
+    $.getJSON(url, function (data) {
+
+      let status = data.status;
+      let result = data.result;
+      let message = data.message;
+
+      if (status == 'ok') {
+
+        // update the lists
+        assignments.unassigned_objects = result.unassigned_objects;
+        assignments.unassigned_start_keyid = result.unassigned_start_keyid;
+        assignments.unassigned_end_keyid = result.unassigned_end_keyid;
+
+        assignments.assigned_objects = result.assigned_objects;
+        assignments.assigned_start_keyid = result.assigned_start_keyid;
+        assignments.assigned_end_keyid = result.assigned_end_keyid;
+
+        // update the controls for unassigned objects
+        let $unassigned_select = $('#objectid-reviewlist');
+
+        $unassigned_select.empty();
+
+        for (let objectid of assignments.unassigned_objects) {
+
+          $unassigned_select.append(
+            `<option value="${objectid}">Object ID: ${objectid}</option>`
+          );
+
+        }
+
+        // for each user ID that has assigned objects, update their select
+        // controls as well
+        for (let userid in assignments.assigned_objects) {
+
+          let this_user_assigned = assignments.assigned_objects[userid];
+
+          // look up the select associated with this userid
+          let $userid_select = $(`#assigned-reviewlist-userid-${userid}`);
+          $userid_select.empty();
+
+          for (let objectid of this_user_assigned) {
+            $userid_select.append(
+              `<option value="${objectid}">Object ID: ${objectid}</option>`
+            );
+          }
+
+        }
+
+      }
+
+      else {
+        ui.alert_box(message, 'danger');
+      }
+
+    }).done(function () {
+
+
+    }).fail(function (xhr) {
+
+    });
+
+  }
+
+
+};
+
+
 var admin = {
 
   // this sets up the admin form actions
@@ -76,8 +157,9 @@ var admin = {
           $('#emailuser').val(result.email_user);
           $('#emailpass').val(result.email_pass);
 
-          // TODO: empty then append per line
-          $('#admin-allowed-email-addrs').val(result.allowed_email_addrs);
+          $('#admin-allowed-email-addrs').val(
+            result.allowed_email_addrs.join(', ')
+          );
 
           ui.alert_box(message, 'info');
 

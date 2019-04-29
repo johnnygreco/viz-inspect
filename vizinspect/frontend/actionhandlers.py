@@ -12,27 +12,22 @@ These are Tornado handlers for the AJAX actions.
 ####################
 
 import logging
-import numpy as np
-from datetime import datetime
 import os.path
 import multiprocessing as mp
+import json
+from datetime import datetime
+import numpy as np
+
 
 # for generating encrypted token information
 from cryptography.fernet import Fernet
 
 
-######################################
-## CUSTOM JSON ENCODER FOR FRONTEND ##
-######################################
-
-# we need this to send objects with the following types to the frontend:
-# - bytes
-# - ndarray
-# - datetime
-# - set
-import json
-
 class FrontendEncoder(json.JSONEncoder):
+    '''
+    This handles encoding weird things.
+
+    '''
 
     def default(self, obj):
 
@@ -58,8 +53,6 @@ class FrontendEncoder(json.JSONEncoder):
 # thing when it converts dicts to JSON when a
 # tornado.web.RequestHandler.write(dict) is called.
 json._default_encoder = FrontendEncoder()
-
-
 
 #############
 ## LOGGING ##
@@ -328,7 +321,6 @@ def worker_export_catalog(
 
 
 def worker_list_review_assignments(
-        userid=None,
         start_keyid=0,
         end_keyid=50,
 ):
@@ -379,6 +371,9 @@ def worker_list_review_assignments(
                 assigned_objectdict[x['reviewer_userid']].add(
                     x['objectid']
                 )
+
+        for key in assigned_objectdict:
+            assigned_objectdict[key] = list(assigned_objectdict[key])
 
         # this is the dict we return
         retdict = {
@@ -877,7 +872,7 @@ class ReviewAssignmentHandler(BaseHandler):
     @gen.coroutine
     def get(self):
         '''
-        This shows the admin page.
+        This gets the lists of assigned and unassigned objects for review.
 
         '''
 
@@ -889,36 +884,49 @@ class ReviewAssignmentHandler(BaseHandler):
         # only allow in superuser roles
         if current_user and current_user['user_role'] == 'superuser':
 
+            start_keyid = xhtml_escape(self.get_argument('start_keyid', '0'))
+            end_keyid = xhtml_escape(self.get_argument('end_keyid', '50'))
+
+            start_keyid = int(start_keyid)
+            if end_keyid in ('none', 'null'):
+                end_keyid = None
+            else:
+                end_keyid = int(end_keyid)
+
             # get the review assignments
-
-
-            # ask the authnzerver for a user list
-            reqtype = 'user-list'
-            reqbody = {'user_id': None}
-
-            ok, resp, msgs = yield self.authnzerver_request(
-                reqtype, reqbody
+            reviewlist_info = yield self.executor.submit(
+                worker_list_review_assignments,
+                start_keyid=start_keyid,
+                end_keyid=end_keyid,
             )
 
-            if not ok:
+            if reviewlist_info is not None:
 
-                LOGGER.error('no user list returned from authnzerver')
-                user_list = []
+                retdict = {'status':'ok',
+                           'message':'objectlist OK',
+                           'result':reviewlist_info}
 
             else:
-                user_list = resp['user_info']
 
-            self.render('admin.html',
-                        flash_messages=self.render_flash_messages(),
-                        user_account_box=self.render_user_account_box(),
-                        page_title="Server admin",
-                        siteinfo=self.siteinfo,
-                        userlist=user_list)
+                retdict = {'status':'failed',
+                           'message':"Unable to retrieve object list.",
+                           'result':None}
+                self.set_status(404)
 
+            self.write(retdict)
+            self.finish()
 
-        # anything else is probably the locked user, turn them away
+        # anything else is not allowed, turn them away
         else:
-            self.render_blocked_message()
+            self.set_status(403)
+            retdict = {
+                'status':'failed',
+                'result':None,
+                'message':("Sorry, you don't have access. "
+                           "API keys are not allowed for this endpoint.")
+            }
+            self.write(retdict)
+            self.finish()
 
 
 
