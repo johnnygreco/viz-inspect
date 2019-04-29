@@ -1,4 +1,4 @@
-/*global $, ui */
+/*global $, ui, Math */
 
 /*
   vizinspect-admin.js - Waqas Bhatti (wbhatti@astro.princeton.edu) - Mar 2019
@@ -18,9 +18,12 @@ var assignments = {
   assigned_end_keyid: null,
 
   // this fetches the lists of assigned and unassigned objects
-  review_assignment_lists: function (start_keyid, end_keyid) {
+  review_assignment_lists: function (unassigned_start_keyid,
+                                     unassigned_end_keyid,
+                                     assigned_start_keyid,
+                                     assigned_end_keyid) {
 
-    let url = `/api/review-assign?start_keyid=${start_keyid}&end_keyid=${end_keyid}`;
+    let url = `/api/review-assign?unassigned_start_keyid=${unassigned_start_keyid}&unassigned_end_keyid=${unassigned_end_keyid}&assigned_start_keyid=${assigned_start_keyid}&assigned_end_keyid=${assigned_end_keyid}`;
 
     $.getJSON(url, function (data) {
 
@@ -76,15 +79,92 @@ var assignments = {
         ui.alert_box(message, 'danger');
       }
 
-    }).done(function () {
-
-
     }).fail(function (xhr) {
+
+      let message =
+          'Could not fetch lists of assigned/un-assigned objects, ' +
+          'something went wrong with the server backend.';
+
+      if (xhr.status == 500) {
+        message = 'Something went wrong with the server backend ' +
+          ' while trying to get assigned/un-assigned object lists.';
+      }
+
+      ui.alert_box(message, 'danger');
 
     });
 
-  }
+  },
 
+
+  // this adds to the assignment list for a user ID
+  assign_objects_to_userid: function (userid) {
+
+    // look up the select associated with this userid
+    let $userid_select = $(`#assigned-reviewlist-userid-${userid}`);
+
+    // look up the select for the unassigned objects
+    let $unassigned_select = $('#objectid-reviewlist');
+    let selected_objects = $unassigned_select.val();
+
+    let posturl = '/api/review-assign';
+    let _xsrf = $('#admin-review-assign-update-form > input[type="hidden"]').val();
+    let postparams = {
+      _xsrf:_xsrf,
+      userid: userid,
+      assigned_objects: selected_objects
+    };
+
+    $.post(posturl, postparams, function (data) {
+
+      let status = data.status;
+      let result = data.result;
+      let message = data.message;
+
+      if (status == 'ok') {
+
+        assignments.review_assignment_lists(
+          assignments.unassigned_start_keyid,
+          assignments.unassigned_end_keyid,
+          assignments.assigned_start_keyid,
+          assignments.assigned_end_keyid
+        );
+
+      }
+
+      else {
+
+        ui.alert_box(message, 'danger');
+
+      }
+
+    }, 'json').fail( function (xhr) {
+
+      let message =
+          'Could not fetch lists of assigned/un-assigned objects, ' +
+          'something went wrong with the server backend.';
+
+      if (xhr.status == 500) {
+        message = 'Something went wrong with the server backend ' +
+          ' while trying to get assigned/un-assigned object lists.';
+      }
+
+      ui.alert_box(message, 'danger');
+
+    });
+
+  },
+
+
+  // this removes objects from the assignment list for a user ID
+  unassign_objects_from_userid: function (userid, unassigned_objects) {
+
+    // look up the select associated with this userid
+    let $userid_select = $(`#assigned-reviewlist-userid-${userid}`);
+    let selected_objects = $userid_select.val();
+
+
+  }
 
 };
 
@@ -170,10 +250,10 @@ var admin = {
 
         var message =
             'Could not update email or sign-up/in settings, ' +
-            'something went wrong with the LCC server backend.';
+            'something went wrong with the server backend.';
 
         if (xhr.status == 500) {
-          message = 'Something went wrong with the LCC-Server backend ' +
+          message = 'Something went wrong with the server backend ' +
             ' while trying to update email/sign-up/in settings.';
         }
 
@@ -247,10 +327,10 @@ var admin = {
       }, 'json').fail(function (xhr) {
 
         var message = 'Could not update user information, ' +
-            'something went wrong with the LCC server backend.';
+            'something went wrong with the server backend.';
 
         if (xhr.status == 500) {
-          message = 'Something went wrong with the LCC-Server backend ' +
+          message = 'Something went wrong with the server backend ' +
             ' while trying to update user information.';
         }
         else if (xhr.status == 400) {

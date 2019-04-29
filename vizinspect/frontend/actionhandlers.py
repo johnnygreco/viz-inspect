@@ -321,8 +321,10 @@ def worker_export_catalog(
 
 
 def worker_list_review_assignments(
-        start_keyid=0,
-        end_keyid=50,
+        unassigned_start_keyid=0,
+        unassigned_end_keyid=50,
+        assigned_start_keyid=0,
+        assigned_end_keyid=50,
 ):
     '''
     This lists review assignments.
@@ -340,8 +342,8 @@ def worker_list_review_assignments(
              (conn, meta),
              review_status='unassigned-all',
              userid=None,
-             start_keyid=start_keyid,
-             end_keyid=end_keyid,
+             start_keyid=unassigned_start_keyid,
+             end_keyid=unassigned_end_keyid,
              getinfo='objectids'
         )
 
@@ -351,8 +353,8 @@ def worker_list_review_assignments(
              (conn, meta),
              review_status='assigned-all',
              userid=None,
-             start_keyid=start_keyid,
-             end_keyid=end_keyid,
+             start_keyid=assigned_start_keyid,
+             end_keyid=assigned_end_keyid,
              getinfo='review-assignments'
         )
 
@@ -884,20 +886,37 @@ class ReviewAssignmentHandler(BaseHandler):
         # only allow in superuser roles
         if current_user and current_user['user_role'] == 'superuser':
 
-            start_keyid = xhtml_escape(self.get_argument('start_keyid', '0'))
-            end_keyid = xhtml_escape(self.get_argument('end_keyid', '50'))
+            unassigned_start_keyid = xhtml_escape(
+                self.get_argument('unassigned_start_keyid', '0')
+            )
+            unassigned_end_keyid = xhtml_escape(
+                self.get_argument('unassigned_end_keyid', '50')
+            )
+            assigned_start_keyid = xhtml_escape(
+                self.get_argument('assigned_start_keyid', '0')
+            )
+            assigned_end_keyid = xhtml_escape(
+                self.get_argument('assigned_end_keyid', '50')
+            )
 
-            start_keyid = int(start_keyid)
-            if end_keyid in ('none', 'null'):
-                end_keyid = None
+            unassigned_start_keyid = int(unassigned_start_keyid)
+            assigned_start_keyid = int(assigned_start_keyid)
+            if unassigned_end_keyid in ('none', 'null'):
+                unassigned_end_keyid = None
             else:
-                end_keyid = int(end_keyid)
+                unassigned_end_keyid = int(unassigned_end_keyid)
+            if assigned_end_keyid in ('none', 'null'):
+                assigned_end_keyid = None
+            else:
+                assigned_end_keyid = int(assigned_end_keyid)
 
             # get the review assignments
             reviewlist_info = yield self.executor.submit(
                 worker_list_review_assignments,
-                start_keyid=start_keyid,
-                end_keyid=end_keyid,
+                unassigned_start_keyid=unassigned_start_keyid,
+                unassigned_end_keyid=unassigned_end_keyid,
+                assigned_start_keyid=assigned_start_keyid,
+                assigned_end_keyid=assigned_end_keyid,
             )
 
             if reviewlist_info is not None:
