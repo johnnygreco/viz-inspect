@@ -787,6 +787,7 @@ def update_object_flags(objectid,
 def update_review_assignments(objectid_list,
                               reviewer_userid,
                               dbinfo,
+                              do_unassign=False,
                               dbkwargs=None):
     '''
     This updates review assignments for a list of objectids
@@ -800,6 +801,11 @@ def update_review_assignments(objectid_list,
 
     reviewer_userid : int
         The userid of the reviewer.
+
+    do_unassign : bool
+        If False, will assign the objects in `objectid_list` to
+        `reviewer_userid`. If True, will unassign objects in `objectid_list`
+        from the reviewer, i.e. set their `reviewer_userid` to NULL.
 
     dbinfo : tuple
         This is a tuple of two items:
@@ -851,14 +857,26 @@ def update_review_assignments(objectid_list,
     # prepare the tables
     object_catalog = meta.tables['object_catalog']
 
-    upd = update(object_catalog).where(
-        object_catalog.c.objectid in list(objectid_list)
-    ).values(
-        {'reviewer_userid':reviewer_userid}
-    )
+    if not do_unassign:
+
+        upd = update(object_catalog).where(
+            object_catalog.c.objectid.in_(list(objectid_list))
+        ).values(
+            {'reviewer_userid':reviewer_userid}
+        )
+
+    else:
+
+        upd = update(object_catalog).where(
+            object_catalog.c.objectid.in_(list(objectid_list))
+        ).values(
+            {'reviewer_userid':None}
+        )
 
     with conn.begin():
-        conn.execute(upd)
+        res = conn.execute(upd)
+        retval = res.rowcount
+        res.close()
 
     # close everything down if we were passed a database URL only and had to
     # make a new engine
@@ -867,4 +885,4 @@ def update_review_assignments(objectid_list,
         meta.bind = None
         engine.dispose()
 
-    return True
+    return retval

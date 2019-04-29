@@ -390,10 +390,39 @@ def worker_list_review_assignments(
         return retdict
 
     except Exception as e:
-        LOGGER.exception("Could not get object list.")
+        LOGGER.exception("Could not get review assignments.")
         return None
 
 
+
+def worker_assign_reviewer(
+        userid,
+        assignment_list,
+        do_unassign=False,
+):
+    '''
+    This assigns objects to a reviewer.
+
+    '''
+
+    try:
+
+        currproc = mp.current_process()
+        conn, meta = currproc.connection, currproc.metadata
+
+        updated_assignments = catalogs.update_review_assignments(
+            assignment_list,
+            userid,
+            (conn, meta),
+            do_unassign=do_unassign,
+        )
+
+        return updated_assignments
+
+    except Exception as e:
+
+        LOGGER.exception("Could not assign objects for review.")
+        return False
 
 
 #####################
@@ -930,7 +959,6 @@ class ReviewAssignmentHandler(BaseHandler):
                 retdict = {'status':'failed',
                            'message':"Unable to retrieve object list.",
                            'result':None}
-                self.set_status(404)
 
             self.write(retdict)
             self.finish()
@@ -972,3 +1000,102 @@ class ReviewAssignmentHandler(BaseHandler):
 
         # get the current user
         current_user = self.current_user
+
+        # only allow in superuser roles
+        if current_user and current_user['user_role'] == 'superuser':
+
+            try:
+
+                target_userid = int(
+                    xhtml_escape(self.get_argument('userid',None))
+                )
+                target_objectlist = json.loads(
+                    self.get_argument('assigned_objects',None)
+                )
+                target_objectlist = [int(x) for x in target_objectlist]
+
+                do_unassign_flag = int(
+                    xhtml_escape(self.get_argument('unassign_flag','0'))
+                )
+
+                # this is the normal assign mode
+                if do_unassign_flag == 0:
+
+                    # get the review assignments
+                    assigned_ok = yield self.executor.submit(
+                        worker_assign_reviewer,
+                        target_userid,
+                        target_objectlist,
+                        do_unassign=False,
+                    )
+
+                    if assigned_ok:
+
+                        retdict = {'status':'ok',
+                                   'message':'objects assigned OK',
+                                   'result':assigned_ok}
+
+                    else:
+
+                        retdict = {
+                            'status':'failed',
+                            'message':"Unable to assign objects to reviewer.",
+                            'result':None
+                        }
+
+                    self.write(retdict)
+                    self.finish()
+
+                # otherwise, we're doing unassigning of objects for a user
+                else:
+
+                    # get the review assignments
+                    unassigned_ok = yield self.executor.submit(
+                        worker_assign_reviewer,
+                        target_userid,
+                        target_objectlist,
+                        do_unassign=True,
+                    )
+
+                    if unassigned_ok:
+
+                        retdict = {'status':'ok',
+                                   'message':'objects unassigned OK',
+                                   'result':unassigned_ok}
+
+                    else:
+
+                        retdict = {
+                            'status':'failed',
+                            'message':(
+                                "Unable to unassign objects from reviewer."
+                            ),
+                            'result': None
+                        }
+
+                    self.write(retdict)
+                    self.finish()
+
+            except Exception as e:
+
+                LOGGER.exception("Failed to understand request.")
+                self.set_status(400)
+                retdict = {
+                    'status':'failed',
+                    'result':None,
+                    'message':("Unknown or invalid arguments provided.")
+                }
+                self.write(retdict)
+                self.finish()
+
+        else:
+
+            self.set_status(403)
+            retdict = {
+                'status':'failed',
+                'result':None,
+                'message':("Sorry, you don't have access. "
+                           "API keys are not allowed for this endpoint.")
+            }
+            self.write(retdict)
+            self.finish()

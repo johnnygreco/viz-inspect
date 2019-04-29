@@ -112,7 +112,7 @@ var assignments = {
     let postparams = {
       _xsrf:_xsrf,
       userid: userid,
-      assigned_objects: selected_objects
+      assigned_objects: JSON.stringify(selected_objects)
     };
 
     $.post(posturl, postparams, function (data) {
@@ -123,6 +123,7 @@ var assignments = {
 
       if (status == 'ok') {
 
+        // if the assignment succeeds, update the view to show the new state
         assignments.review_assignment_lists(
           assignments.unassigned_start_keyid,
           assignments.unassigned_end_keyid,
@@ -157,12 +158,59 @@ var assignments = {
 
 
   // this removes objects from the assignment list for a user ID
-  unassign_objects_from_userid: function (userid, unassigned_objects) {
+  unassign_objects_from_userid: function (userid) {
 
     // look up the select associated with this userid
     let $userid_select = $(`#assigned-reviewlist-userid-${userid}`);
     let selected_objects = $userid_select.val();
 
+    let posturl = '/api/review-assign';
+    let _xsrf = $('#admin-review-assign-update-form > input[type="hidden"]').val();
+    let postparams = {
+      _xsrf:_xsrf,
+      userid: userid,
+      assigned_objects: JSON.stringify(selected_objects),
+      unassign_flag: 1
+    };
+
+    $.post(posturl, postparams, function (data) {
+
+      let status = data.status;
+      let result = data.result;
+      let message = data.message;
+
+      if (status == 'ok') {
+
+        // if the assignment succeeds, update the view to show the new state
+        assignments.review_assignment_lists(
+          assignments.unassigned_start_keyid,
+          assignments.unassigned_end_keyid,
+          assignments.assigned_start_keyid,
+          assignments.assigned_end_keyid
+        );
+
+      }
+
+      else {
+
+        ui.alert_box(message, 'danger');
+
+      }
+
+    }, 'json').fail( function (xhr) {
+
+      let message =
+          'Could not fetch lists of assigned/un-assigned objects, ' +
+          'something went wrong with the server backend.';
+
+      if (xhr.status == 500) {
+        message = 'Something went wrong with the server backend ' +
+          ' while trying to get assigned/un-assigned object lists.';
+      }
+
+      ui.alert_box(message, 'danger');
+
+    });
 
   }
 
@@ -173,6 +221,38 @@ var admin = {
 
   // this sets up the admin form actions
   action_setup: function () {
+
+    // handle the assign button
+    $('#review-assign-objects').on('click', function (evt) {
+
+      evt.preventDefault();
+
+      let userid = parseInt($('#assign-objects-userid').val());
+
+      if (!isNaN(userid)) {
+
+        assignments.assign_objects_to_userid(userid);
+
+      }
+
+    });
+
+    // handle the unassign button
+    $('.review-unassign-objects').on('click', function (evt) {
+
+      evt.preventDefault();
+
+      let userid = parseInt($(this).attr('data-userid'));
+
+      if (!isNaN(userid)) {
+
+        assignments.unassign_objects_from_userid(userid);
+
+      }
+
+
+    });
+
 
     // handle the email and signups form update
     $('#admin-email-update-form').on('submit', function (evt) {
@@ -238,7 +318,7 @@ var admin = {
           $('#emailpass').val(result.email_pass);
 
           $('#admin-allowed-email-addrs').val(
-            result.allowed_email_addrs.join(', ')
+            result.allowed_user_emailaddr.join(', ')
           );
 
           ui.alert_box(message, 'info');
