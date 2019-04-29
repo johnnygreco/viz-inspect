@@ -64,15 +64,16 @@
 
 {% block pagejs %}
 
-$(document).ready(function() {
+<script>
+  $(document).ready(function() {
 
-$('#user-delete-form').on('submit', function (evt) {
+    $('#user-delete-form').on('submit', function (evt) {
 
-// clear user's apikeys from localStorage so they don't show up again
-localStorage.clear();
+      // clear user's apikeys from localStorage so they don't show up again
+      localStorage.clear();
 
-});
+    });
 
-});
-
+  });
+</script>
 {% end %}
