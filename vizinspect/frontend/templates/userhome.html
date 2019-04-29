@@ -45,18 +45,20 @@
 
 {% block pagejs %}
 
-$(document).ready(function() {
+<script>
+  $(document).ready(function() {
 
-// UI action setup
-ui.action_setup();
+    // UI action setup
+    ui.action_setup();
 
-// UI cookie settings
-ui.prefs_cookie_expires_days = {{ cookie_expires_days }};
-ui.prefs_cookie_secure = {{ cookie_secure }};
+    // UI cookie settings
+    ui.prefs_cookie_expires_days = {{ cookie_expires_days }};
+    ui.prefs_cookie_secure = {{ cookie_secure }};
 
-// load the current settings
-ui.load_cookie_prefs('prefs-page');
+    // load the current settings
+    ui.load_cookie_prefs('prefs-page');
 
-});
+  });
+</script>
 
 {% end %}
