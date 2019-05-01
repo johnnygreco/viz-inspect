@@ -541,6 +541,9 @@ def main():
         with open(siteinfojson,'w') as outfd:
             json.dump(SITEINFO, outfd, indent=2)
 
+        # make it readable/writeable by this user only
+        os.chmod(siteinfojson, 0o100600)
+
         # now we have the catalog CSV and image dir
         # load the objects into the DB
         from ..backend import database, catalogs
@@ -700,8 +703,6 @@ def main():
                             initializer=setup_worker,
                             initargs=(SITEINFO['database_url'],),
                             finalizer=close_database)
-
-
 
 
     ##################
@@ -1037,7 +1038,7 @@ def main():
     except KeyboardInterrupt:
 
         LOGGER.info('received Ctrl-C: shutting down...')
-        tornado.ioloop.IOLoop.instance().stop()
+        loop.stop()
         # close down the processpool
 
     EXECUTOR.shutdown()
