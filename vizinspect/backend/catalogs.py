@@ -222,7 +222,8 @@ def load_catalog(catalog_fpath,
 
         # here, if the images are all remote, then we don't check if they exist
         # locally. the server frontend will take care of getting them later.
-        if images_dpath.startswith('dos://'):
+        if (images_dpath.startswith('dos://') or
+            images_dpath.startswith('s3://')):
 
             object_images = [
                 '%s/%s' % (
