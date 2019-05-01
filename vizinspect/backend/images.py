@@ -39,6 +39,7 @@ LOGEXCEPTION = LOGGER.exception
 import os.path
 
 import numpy as np
+import numpy.random as npr
 
 import matplotlib
 matplotlib.use('Agg')
@@ -49,6 +50,7 @@ import matplotlib.pyplot as plt
 
 from vizinspect import bucketstorage
 from .catalogs import get_object, get_objects
+
 
 
 ###########################
@@ -102,6 +104,7 @@ def load_galaxy_image(image_file,
         if os.path.exists(download_to):
 
             use_image_file = download_to
+            LOGINFO('Using local cached copy of %s.' % image_file)
 
         else:
 
@@ -111,6 +114,7 @@ def load_galaxy_image(image_file,
                 download_to,
                 client=bucket_client
             )
+            LOGINFO('Downloaded %s from remote.' % image_file)
 
     else:
 
@@ -141,6 +145,7 @@ def make_main_plot(
         color_plot_ylim=None,
         reff_plot_xlim=None,
         reff_plot_ylim=None,
+        random_sample=5000,
         bucket_client=None,
 ):
     '''This generates the main plot.
@@ -179,6 +184,10 @@ def make_main_plot(
     reff_plot_ylim : tuple of two ints or None
         This sets the ylim of the reff-mu plot.
 
+    random_sample : int
+        The number of objects to sample randomly from the database to make the
+        plot.
+
     bucket_client : bucketstorage.client instance
         This is a client used to download files from S3/DOS.
 
@@ -199,9 +208,9 @@ def make_main_plot(
 
     this_gi_color = this_object[0]['extra_columns']['g-i']
     this_gr_color = this_object[0]['extra_columns']['g-r']
-    this_r_e = this_object[0]['extra_columns']['r_e']
+    this_r_e = this_object[0]['extra_columns']['flux_radius_ave_g']
     this_mu_e_ave_forced_g = (
-        this_object[0]['extra_columns']['mu_e_ave_forced_g']
+        this_object[0]['extra_columns']['mu_ave_g']
     )
     this_object_image = this_object[0]['filepath']
 
@@ -232,23 +241,48 @@ def make_main_plot(
 
     # get the info from the database
     full_catalog, start_keyid, end_keyid = (
-        get_objects(dbinfo, getinfo='all', end_keyid=None)
+        get_objects(
+            dbinfo,
+            getinfo='plotcols',
+            end_keyid=None
+        )
     )
 
-    gi_color = np.array([x['extra_columns']['g-i'] for x in full_catalog])
-    gr_color = np.array([x['extra_columns']['g-r'] for x in full_catalog])
-    r_e = np.array([x['extra_columns']['r_e'] for x in full_catalog])
-    mu_e_ave_forced_g = np.array([
-        x['extra_columns']['mu_e_ave_forced_g'] for x in full_catalog
-    ])
+    gi_color = np.array([x[0] for x in full_catalog])
+    gr_color = np.array([x[1] for x in full_catalog])
+    r_e = np.array([x[2] for x in full_catalog])
+    mu_e_ave_forced_g = np.array([x[3] for x in full_catalog])
+
+    if random_sample is not None:
+
+        sample_index = npr.choice(
+            gi_color.size,
+            random_sample,
+            replace=False
+        )
+
+        sampled_gi_color = gi_color[sample_index]
+        sampled_gr_color = gr_color[sample_index]
+        sampled_re = r_e[sample_index]
+        sampled_mue = mu_e_ave_forced_g[sample_index]
+
+    else:
+
+        sampled_gi_color = gi_color
+        sampled_gr_color = gr_color
+        sampled_re = r_e
+        sampled_mue = mu_e_ave_forced_g
 
 
     # make the color plot for all of the objects
-    ax_top.scatter(
-        gi_color,
-        gr_color,
+    ax_top.plot(
+        sampled_gi_color,
+        sampled_gr_color,
         alpha=0.3,
-        rasterized=True
+        rasterized=True,
+        linestyle='None',
+        marker='.',
+        ms=1,
     )
     ax_top.set_xlabel('$g-i$', fontsize=plot_fontsize)
     ax_top.set_ylabel('$g-r$', fontsize=plot_fontsize)
@@ -266,15 +300,25 @@ def make_main_plot(
                         gr_color.max()+0.2)
 
     # overplot the current object as a star
-    ax_top.scatter(this_gi_color,
-                   this_gr_color,
-                   c='k', s=300, marker='*', edgecolor='k')
+    ax_top.plot(
+        this_gi_color,
+        this_gr_color,
+        linestyle='None',
+        ms=20,
+        markeredgecolor='k',
+        markerfacecolor='k',
+        marker='*'
+    )
 
     # make the half-light radius and surface-brightness plot
-    ax_bot.scatter(
-        r_e,
-        mu_e_ave_forced_g,
-        alpha=0.3
+    ax_bot.plot(
+        sampled_re,
+        sampled_mue,
+        alpha=0.3,
+        rasterized=True,
+        linestyle='None',
+        marker='.',
+        ms=1,
     )
     ax_bot.set_xlabel(
         r'$r_\mathrm{eff}\ \mathrm{[arcsec]}$',
@@ -294,9 +338,15 @@ def make_main_plot(
         ax_bot.set_ylim(20,30)
 
     # overplot this object as a star
-    ax_bot.scatter(this_r_e,
-                   this_mu_e_ave_forced_g,
-                   c='k', s=300, marker='*', edgecolor='k')
+    ax_bot.plot(
+        this_r_e,
+        this_mu_e_ave_forced_g,
+        linestyle='None',
+        ms=20,
+        markeredgecolor='k',
+        markerfacecolor='k',
+        marker='*'
+    )
 
     outfile = os.path.join(
         outdir,
