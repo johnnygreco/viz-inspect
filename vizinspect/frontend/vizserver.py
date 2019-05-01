@@ -701,7 +701,7 @@ def main():
     #
     EXECUTOR = ProcExecutor(max_workers=MAXWORKERS,
                             initializer=setup_worker,
-                            initargs=(SITEINFO['database_url'],),
+                            initargs=(SITEINFO,),
                             finalizer=close_database)
 
 

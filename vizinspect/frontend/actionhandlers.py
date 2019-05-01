@@ -214,11 +214,12 @@ def worker_get_objects(
             userid=userid,
             start_keyid=start_keyid,
             end_keyid=end_keyid,
-            getinfo=getinfo
+            getinfo=getinfo,
+            fast_fetch=True
         )
 
         # reform to a single list
-        returned_objectlist = [x['objectid'] for x in objectlist]
+        returned_objectlist = [x[0] for x in objectlist]
 
         # this is the dict we return
         retdict = {

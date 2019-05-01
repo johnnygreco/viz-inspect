@@ -69,7 +69,6 @@
                       id="jump-source-index">Jump to object</button>
             </div>
           </div>
-
         </div>
 
         <div class="col-2 d-flex justify-content-end">
@@ -217,21 +216,16 @@
     <div class="col-sm-12 col-md-3">
 
       <div class="row">
-        <div class="col-12">
-
-          <h4>Comments on this object</h4>
-
-          <div class="all-object-comments" >
-
-
-          </div>
+        <div class="col-10">
+          <h4>Currently browsing list</h4>
+        </div>
+        <div class="col-2" id="spinner-block" >
 
         </div>
       </div>
 
-      <div class="row mt-4">
+      <div class="row">
         <div class="col-12">
-          <h4>Currently browsing</h4>
           <form>
             <div class="form-group">
               <select class="custom-select" id="objectlist-pref-select">
@@ -261,6 +255,61 @@
         </div>
       </div>
 
+      <div class="row mt-2 justify-content-center">
+        <div class="col-6 d-flex justify-content-center">
+          <h6>List page</h6>
+        </div>
+      </div>
+
+      <div class="row justify-content-between" >
+
+        <div class="col-2 d-flex justify-content-start" >
+          <button type="button"
+                  class="btn btn-outline-info btn-sm"
+                  id="prev-list-page">
+            &larr; prev
+          </button>
+        </div>
+
+        <div class="col-6 d-flex justify-content-center" >
+
+          <div class="input-group">
+            <input type="text"
+                   id="current-list-page" data-keyid="0"
+                   class="form-control form-control-sm"
+                   placeholder="current page"
+                   aria-label="current list page" aria-describedby="current-list-page-label">
+            <div class="input-group-append">
+              <button class="btn btn-outline-success btn-sm"
+                      type="button"
+                      id="jump-to-list-page">Jump</button>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="col-2 d-flex justify-content-end" >
+          <button type="button"
+                  class="btn btn-outline-info btn-sm"
+                  id="next-list-page">
+            next &rarr;
+          </button>
+        </div>
+
+      </div>
+
+      <div class="row mt-4">
+        <div class="col-12">
+
+          <h4>Comments on this object</h4>
+
+          <div class="all-object-comments" >
+
+
+          </div>
+
+        </div>
+      </div>
 
     </div>
 
@@ -307,7 +356,8 @@
     {% if current_user['user_role'] in ('authenticated','staff','superuser') %}
 
     // fire the main handler
-    review.get_object_list('all',0,'none',true);
+    // get 50 objects per page
+    review.get_object_list('all',0,100,true);
 
     {% end %}
 

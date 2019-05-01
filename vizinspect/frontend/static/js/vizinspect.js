@@ -391,28 +391,28 @@ var ui = {
       let selected = $(this).val();
 
       if (selected === 'reviewed-all') {
-        review.get_object_list('reviewed-all', 0, 'none', false);
+        review.get_object_list('reviewed-all', 0, 100, false);
       }
       else if (selected === 'unreviewed-all') {
-        review.get_object_list('unreviewed-all', 0, 'none', false);
+        review.get_object_list('unreviewed-all', 0, 100, false);
       }
       else if (selected === 'reviewed-self') {
-        review.get_object_list('reviewed-self', 0, 'none', false);
+        review.get_object_list('reviewed-self', 0, 100, false);
       }
       else if (selected === 'reviewed-other') {
-        review.get_object_list('reviewed-other', 0, 'none', false);
+        review.get_object_list('reviewed-other', 0, 100, false);
       }
       else if (selected === 'assigned-self') {
-        review.get_object_list('assigned-self', 0, 'none', false);
+        review.get_object_list('assigned-self', 0, 100, false);
       }
       else if (selected === 'assigned-reviewed') {
-        review.get_object_list('assigned-reviewed', 0, 'none', false);
+        review.get_object_list('assigned-reviewed', 0, 100, false);
       }
       else if (selected === 'assigned-unreviewed') {
-        review.get_object_list('assigned-unreviewed', 0, 'none', false);
+        review.get_object_list('assigned-unreviewed', 0, 100, false);
       }
       else {
-        review.get_object_list('all', 0, 'none', false);
+        review.get_object_list('all', 0, 100, false);
       }
 
     });
@@ -563,6 +563,13 @@ var review = {
 
     let url = `/api/load-object/${source_index}`;
 
+    // set up a spinner
+    $('#spinner-block').html(
+      '<div class="spinner-border" role="status">' +
+        '<span class="sr-only">Loading...</span>' +
+        '</div>'
+    );
+
     // fire the request to the backend
     $.getJSON(url, function(data) {
 
@@ -599,9 +606,11 @@ var review = {
         $('#current-objectid-val').html(objectinfo.objectid);
         $('#current-ra-val').html(objectinfo.ra);
         $('#current-dec-val').html(objectinfo.dec);
-        $('#current-reff-val').html(objectinfo.extra_columns['r_e'].toPrecision(2));
+        $('#current-reff-val').html(
+          objectinfo.extra_columns['flux_radius_ave_g'].toPrecision(2)
+        );
         $('#current-mug0-val').html(
-          objectinfo.extra_columns['mu_e_ave_forced_g'].toPrecision(4)
+          objectinfo.extra_columns['mu_ave_g'].toPrecision(4)
         );
         $('#current-gicolor-val').html(objectinfo.extra_columns['g-i'].toPrecision(2));
         $('#current-grcolor-val').html(objectinfo.extra_columns['g-r'].toPrecision(2));
@@ -730,8 +739,13 @@ ${item}
         ui.alert_box(message, "danger");
       }
 
+    }).done(function () {
+
+      $('#spinner-block').empty();
+
     }).fail(function(xhr) {
       ui.alert_box("Could not load this object from the backend.", "danger");
+      $('#spinner-block').empty();
     });
 
   },
