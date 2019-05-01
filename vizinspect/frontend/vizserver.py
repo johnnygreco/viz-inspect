@@ -25,6 +25,8 @@ import socket
 import json
 import multiprocessing as mp
 from datetime import datetime
+import subprocess
+from functools import partial
 
 # setup signal trapping on SIGINT
 def recv_sigint(signum, stack):
@@ -172,12 +174,6 @@ define('flagkeys',
        help=("This tells the server what object flags to use for the catalog."),
        type=str)
 
-define('overwrite',
-       default=False,
-       help=("This tells the server to overwrite "
-             "existing catalog objects if new ones have the same objectid."),
-       type=bool)
-
 define('firststart',
        default=False,
        help=("This tells the server to assume "
@@ -191,11 +187,12 @@ define('firststart',
 ## UTILS ##
 ###########
 
-def setup_worker(database_url):
+def setup_worker(siteinfo):
     '''This sets up the workers to ignore the INT signal, which is handled by
     the main process.
 
-    Also sets up the backend database instance.
+    Sets up the backend database instance. Also sets up the bucket client if
+    required.
 
     '''
 
@@ -212,10 +209,23 @@ def setup_worker(database_url):
     # variables
     currproc.engine, currproc.connection, currproc.metadata = (
         database.get_vizinspect_db(
-            database_url,
+            siteinfo['database_url'],
             database.VIZINSPECT
         )
     )
+
+    if siteinfo['images_are_remote']:
+
+        from vizinspect import bucketstorage
+
+        currproc.bucket_client = bucketstorage.client(
+            (siteinfo['access_token'], siteinfo['secret_key']),
+            region=siteinfo['region'],
+            endpoint=siteinfo['endpoint']
+        )
+
+    else:
+        currproc.bucket_client = None
 
 
 
@@ -281,6 +291,29 @@ def main():
     ###################
     ## SET UP CONFIG ##
     ###################
+
+    def periodic_cleanup_worker(imagedir=None, retention_days=7):
+        '''
+        This is a periodic worker to remove older images from imagedir.
+
+        '''
+
+        cmd = (
+            "find {imagedir} -type f -name '*.png' "
+            "-mmin +{mmin} -exec rm -v '{{}}' \;"
+        ).format(imagedir=imagedir,
+                 mmin=retention_days*24)
+
+        try:
+            LOGGER.info("Deleting images older than %s days in %s." %
+                        (retention_days, imagedir))
+            proc = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
+            ndeleted = len(proc.stdout.decode().split('\n'))
+            LOGGER.warning('%s files older than %s days deleted.' %
+                           (ndeleted, retention_days))
+        except Exception as e:
+            LOGGER.exception('Could not delete old files.')
+
 
     MAXWORKERS = options.backgroundworkers
 
@@ -399,7 +432,7 @@ def main():
 
         # 3. confirm the database_url in the site-info.json file
         LOGGER.info('Please confirm the database URL '
-                    'used to connect to the posgresql server.')
+                    'used to connect to the PostgreSQL DB server.')
         database_url = input("Database URL [default: %s]: " %
                              SITEINFO['database_url'])
         if not database_url or len(database_url.strip()) == 0:
@@ -427,11 +460,13 @@ def main():
             default_s3_endpoint = 'https://s3.amazonaws.com'
 
             if image_dir.startswith('dos://'):
-                region = input("Region [default: %s]: " % default_dos_region)
+                region = input(
+                    "Bucket region [default: %s]: " % default_dos_region
+                )
                 if not region or len(region.strip()) == 0:
                     region = default_dos_region
                 endpoint = input(
-                    "Endpoint [default: %s]: " % default_dos_endpoint
+                    "Bucket endpoint [default: %s]: " % default_dos_endpoint
                 )
                 if not endpoint or len(endpoint.strip()) == 0:
                     endpoint = default_dos_endpoint
@@ -451,6 +486,7 @@ def main():
             SITEINFO['secret_key'] = secret_key
             SITEINFO['region'] = region
             SITEINFO['endpoint'] = endpoint
+            SITEINFO['images_are_remote'] = True
 
         else:
 
@@ -458,7 +494,30 @@ def main():
             SITEINFO['secret_key'] = None
             SITEINFO['region'] = None
             SITEINFO['endpoint'] = None
+            SITEINFO['images_are_remote'] = False
 
+
+        # finally, ask for the length of time in days that downloaded images
+        # and generated plots will be left around
+
+        LOGGER.info("To save local disk space, "
+                    "older generated plots and downloaded "
+                    "remote images will be periodically deleted.")
+        default_retention_days = 7
+        retention_days = input(
+            "How long should these be kept on disk? [in days, default: %s]: " %
+            default_retention_days
+        )
+        if not retention_days or len(retention_days.strip()) == 0:
+            retention_days = default_retention_days
+        else:
+            retention_days = int(retention_days)
+
+        SITEINFO['retention_days'] = retention_days
+
+        #
+        # done with config
+        #
 
         # update the site-info.json file
         with open(siteinfojson,'w') as outfd:
@@ -474,20 +533,20 @@ def main():
             LOGGER.warning("The required tables already exist. "
                            "Will add this catalog to them.")
 
-            # ask if existing objects should be overwritten
-            overwrite_ask = input(
-                "Should existing objects be overwritten? [Y/n]: "
-            )
-            if not overwrite_ask or len(overwrite_ask.strip()) == 0:
-                overwrite = True
-            elif overwrite_ask.strip().lower() == 'n':
-                overwrite = False
-            else:
-                overwrite = True
-
-
         LOGGER.info("Loading objects. Using provided flag keys: %s" %
                     options.flagkeys)
+
+        # ask if existing objects should be overwritten
+        overwrite_ask = input(
+            "Should existing objects be overwritten? [Y/n]: "
+        )
+        if not overwrite_ask or len(overwrite_ask.strip()) == 0:
+            overwrite = True
+        elif overwrite_ask.strip().lower() == 'n':
+            overwrite = False
+        else:
+            overwrite = True
+
         loaded = catalogs.load_catalog(
             catalog_path,
             image_dir,
@@ -623,6 +682,8 @@ def main():
                             initializer=setup_worker,
                             initargs=(SITEINFO['database_url'],),
                             finalizer=close_database)
+
+
 
 
     ##################
@@ -932,7 +993,28 @@ def main():
     # start the IOLoop and begin serving requests
     try:
 
-        tornado.ioloop.IOLoop.instance().start()
+        loop = tornado.ioloop.IOLoop.current()
+
+        periodic_clean = partial(
+            periodic_cleanup_worker,
+            imagedir=SITEINFO['data_path'],
+            retention_days=SITEINFO['retention_days']
+        )
+
+        # run once at start
+        periodic_clean()
+
+        # add our periodic callback for the imagedir cleanup
+        # runs every 24 hours
+        periodic_imagedir_clean = tornado.ioloop.PeriodicCallback(
+            periodic_clean,
+            86400000.0,
+            jitter=0.1,
+        )
+        periodic_imagedir_clean.start()
+
+        # start the IOLoop
+        loop.start()
 
     except KeyboardInterrupt:
 
