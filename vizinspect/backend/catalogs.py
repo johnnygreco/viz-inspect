@@ -63,7 +63,7 @@ except Exception as e:
 
     utc = UTC()
 
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.dialects import postgresql as pg
 
 import markdown
@@ -415,6 +415,7 @@ def get_objects(
         getinfo='objectids',
         dbkwargs=None,
         fast_fetch=False,
+        random_sample_percent=None,
 ):
     '''This is used to get object lists filtering on either userids or review
     status or both.
@@ -460,6 +461,15 @@ def get_objects(
     dbkwargs : dict or None
         A dict of kwargs to pass to the database open function.
 
+    fast_fetch : bool
+        If True, returns bare tuples instead of nice dicts per row. This is much
+        faster but not as convenient.
+
+    random_sample_percent: float or None
+        If this is provided, will be used to push the random sampling into the
+        Postgres database itself. This must be a float between 0.0 and 100.0
+        indicating the percentage of rows to sample.
+
     Returns
     -------
 
@@ -500,18 +510,26 @@ def get_objects(
     object_images = meta.tables['object_images']
     object_comments = meta.tables['object_comments']
 
-    join = object_catalog.join(object_images).outerjoin(object_comments)
+    # add in the random sample if specified
+    if random_sample_percent is not None:
+        object_catalog_sample = object_catalog.tablesample(
+            func.bernoulli(random_sample_percent)
+        )
+    else:
+        object_catalog_sample = object_catalog
+
+    join = object_catalog_sample.join(object_images).outerjoin(object_comments)
 
     if getinfo == 'all':
 
         sel = select(
-            [object_catalog.c.id.label('keyid'),
-             object_catalog.c.objectid,
-             object_catalog.c.ra,
-             object_catalog.c.dec,
-             object_catalog.c.user_flags,
-             object_catalog.c.reviewer_userid,
-             object_catalog.c.extra_columns,
+            [object_catalog_sample.c.id.label('keyid'),
+             object_catalog_sample.c.objectid,
+             object_catalog_sample.c.ra,
+             object_catalog_sample.c.dec,
+             object_catalog_sample.c.user_flags,
+             object_catalog_sample.c.reviewer_userid,
+             object_catalog_sample.c.extra_columns,
              object_images.c.filepath,
              object_comments.c.added.label("comment_added_on"),
              object_comments.c.userid.label("comment_by_userid"),
@@ -525,22 +543,22 @@ def get_objects(
     elif getinfo == 'plotcols':
 
         sel = select(
-            [object_catalog.c.extra_columns['g-i'],
-             object_catalog.c.extra_columns['g-r'],
-             object_catalog.c.extra_columns['flux_radius_ave_g'],
-             object_catalog.c.extra_columns['mu_ave_g']]
-        ).select_from(object_catalog)
+            [object_catalog_sample.c.extra_columns['g-i'],
+             object_catalog_sample.c.extra_columns['g-r'],
+             object_catalog_sample.c.extra_columns['flux_radius_ave_g'],
+             object_catalog_sample.c.extra_columns['mu_ave_g']]
+        ).select_from(object_catalog_sample)
         fast_fetch = True
 
     elif getinfo == 'objectids':
-        sel = select([object_catalog.c.objectid]).select_from(join)
+        sel = select([object_catalog_sample.c.objectid]).select_from(join)
 
     elif getinfo == 'review-assignments':
-        sel = select([object_catalog.c.objectid,
-                      object_catalog.c.reviewer_userid]).select_from(join)
+        sel = select([object_catalog_sample.c.objectid,
+                      object_catalog_sample.c.reviewer_userid]).select_from(join)
 
     else:
-        sel = select([object_catalog.c.objectid]).select_from(join)
+        sel = select([object_catalog_sample.c.objectid]).select_from(join)
 
     # figure out the where condition
     if review_status == 'unreviewed-all':
@@ -562,27 +580,27 @@ def get_objects(
         )
     elif review_status == 'assigned-self' and userid is not None:
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid == userid
+            object_catalog_sample.c.reviewer_userid == userid
         )
     elif review_status == 'assigned-reviewed' and userid is not None:
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid == userid
+            object_catalog_sample.c.reviewer_userid == userid
         ).where(
             object_comments.c.added != None
         )
     elif review_status == 'assigned-unreviewed' and userid is not None:
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid == userid
+            object_catalog_sample.c.reviewer_userid == userid
         ).where(
             object_comments.c.added == None
         )
     elif review_status == 'assigned-all':
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid != None
+            object_catalog_sample.c.reviewer_userid != None
         )
     elif review_status == 'unassigned-all':
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid == None
+            object_catalog_sample.c.reviewer_userid == None
         )
     else:
         actual_sel = sel
@@ -590,17 +608,17 @@ def get_objects(
     # add in the pagination
     if start_keyid is not None and end_keyid is not None:
         paged_sel = actual_sel.where(
-            object_catalog.c.id >= start_keyid
+            object_catalog_sample.c.id >= start_keyid
         ).where(
-            object_catalog.c.id <= end_keyid
+            object_catalog_sample.c.id <= end_keyid
         )
     elif start_keyid is not None and end_keyid is None:
         paged_sel = actual_sel.where(
-            object_catalog.c.id >= start_keyid
+            object_catalog_sample.c.id >= start_keyid
         )
     elif end_keyid is not None and start_keyid is None:
         paged_sel = actual_sel.where(
-            object_catalog.c.id <= end_keyid
+            object_catalog_sample.c.id <= end_keyid
         )
     else:
         paged_sel = actual_sel

@@ -145,7 +145,8 @@ def make_main_plot(
         color_plot_ylim=None,
         reff_plot_xlim=None,
         reff_plot_ylim=None,
-        random_sample=5000,
+        random_sample=None,
+        random_sample_percent=2.5,
         bucket_client=None,
 ):
     '''This generates the main plot.
@@ -187,6 +188,12 @@ def make_main_plot(
     random_sample : int
         The number of objects to sample randomly from the database to make the
         plot.
+
+    random_sample_percent: float or None
+        If this is provided, will be used preferentially over `random_sample` to
+        push the random sampling into the Postgres database itself. This must be
+        a float between 0.0 and 100.0 indicating the percentage of rows to
+        sample.
 
     bucket_client : bucketstorage.client instance
         This is a client used to download files from S3/DOS.
@@ -244,9 +251,13 @@ def make_main_plot(
         get_objects(
             dbinfo,
             getinfo='plotcols',
-            end_keyid=None
+            end_keyid=None,
+            random_sample_percent=random_sample_percent
         )
     )
+
+    if random_sample_percent is not None:
+        random_sample = None
 
     gi_color = np.array([x[0] for x in full_catalog])
     gr_color = np.array([x[1] for x in full_catalog])
