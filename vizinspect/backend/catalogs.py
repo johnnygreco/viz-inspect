@@ -413,7 +413,8 @@ def get_objects(
         start_keyid=0,
         end_keyid=50,
         getinfo='objectids',
-        dbkwargs=None
+        dbkwargs=None,
+        fast_fetch=False,
 ):
     '''This is used to get object lists filtering on either userids or review
     status or both.
@@ -450,7 +451,7 @@ def get_objects(
         If set, sets the current userid to use in the filters when review_status
         is one of the -self, -other values.
 
-    getinfo: {'objectids','review-assignments','all'}
+    getinfo: {'objectids','review-assignments','all', 'plotcols'}
         If 'objectids', returns only the objectids matching the specified
         criteria. If 'review-assignments', returns the objectids and a list of
         userids assigned to review each object. If 'all', returns all info per
@@ -520,6 +521,16 @@ def get_objects(
         ).select_from(
             join
         )
+
+    elif getinfo == 'plotcols':
+
+        sel = select(
+            [object_catalog.c.extra_columns['g-i'],
+             object_catalog.c.extra_columns['g-r'],
+             object_catalog.c.extra_columns['flux_radius_ave_g'],
+             object_catalog.c.extra_columns['mu_ave_g']]
+        ).select_from(object_catalog)
+        fast_fetch = True
 
     elif getinfo == 'objectids':
         sel = select([object_catalog.c.objectid]).select_from(join)
@@ -598,7 +609,12 @@ def get_objects(
     with conn.begin():
 
         res = conn.execute(paged_sel)
-        rows = [{column: value for column, value in row.items()} for row in res]
+        if fast_fetch:
+            rows = res.fetchall()
+        else:
+            rows = [
+                {column: value for column, value in row.items()} for row in res
+            ]
 
     # close everything down if we were passed a database URL only and had to
     # make a new engine
