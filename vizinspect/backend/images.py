@@ -47,6 +47,7 @@ matplotlib.rcParams['mathtext.fontset'] = 'cm'
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 
+from vizinspect import bucketstorage
 from .catalogs import get_object, get_objects
 
 
@@ -54,14 +55,32 @@ from .catalogs import get_object, get_objects
 ## LOADING GALAXY IMAGES ##
 ###########################
 
-def load_galaxy_image(image_file):
-    '''This loads a Galaxy image from a PNG into an array readable by matplotlib.
+def load_galaxy_image(image_file,
+                      local_imgdir,
+                      bucket_client=None):
+    '''This loads a Galaxy image from a PNG into an array
+    readable by matplotlib.
+
+    If `image_file` starts with dos:// or s3://, this function will assume you
+    mean to download images from a remote bucket. It will then do the following:
+
+    - check for the image_file's existence in local_imgdir
+    - if found, will load it from there
+    - if not found, will download it from the specified bucket URL (this should
+      be in the image_file) and write it to the local_imgdir. This requires a
+      valid `bucketstorage.client` in `bucket_client`.
 
     Parameters
     ----------
 
     image_file : str
         The name of the file to load.
+
+    local_imgdir : str
+        The local image directory to check for images in and to write them to.
+
+    bucket_client : bucketstorage.client instance
+        This is a client to connect to S3/DOS buckets and download files.
 
     Returns
     -------
@@ -72,8 +91,35 @@ def load_galaxy_image(image_file):
 
     '''
 
+    # check if the image is remote
+    if image_file.startswith('dos://') or image_file.startswith('s3://'):
+
+        bucket_imagepath = image_file.replace('dos://','').replace('s3://','')
+        bucket_name = os.path.dirname(bucket_imagepath)
+        file_name = os.path.basename(bucket_imagepath)
+        download_to = os.path.abspath(os.path.join(local_imgdir, file_name))
+
+        if os.path.exists(download_to):
+
+            use_image_file = download_to
+
+        else:
+
+            use_image_file = bucketstorage.get_file(
+                bucket_name,
+                file_name,
+                download_to,
+                client=bucket_client
+            )
+
+    else:
+
+        use_image_file = image_file
+
+
+    # finally, load the image
     try:
-        image = mpimg.imread(image_file)
+        image = mpimg.imread(use_image_file)
         return image
 
     except Exception as e:
@@ -95,6 +141,7 @@ def make_main_plot(
         color_plot_ylim=None,
         reff_plot_xlim=None,
         reff_plot_ylim=None,
+        bucket_client=None,
 ):
     '''This generates the main plot.
 
@@ -114,7 +161,8 @@ def make_main_plot(
         connection itself is provided, it will be re-used.
 
     outdir : str
-        The directory where the plot file will be written.
+        The directory where the plot file will be written. This is also the
+        directory where images will be downloaded from a remote bucket.
 
     plot_fontsize: int
         The font-size of the plot to make in points.
@@ -130,6 +178,9 @@ def make_main_plot(
 
     reff_plot_ylim : tuple of two ints or None
         This sets the ylim of the reff-mu plot.
+
+    bucket_client : bucketstorage.client instance
+        This is a client used to download files from S3/DOS.
 
     Returns
     -------
@@ -169,7 +220,9 @@ def make_main_plot(
     ax_bot = fig.add_subplot(grid[1,2])
 
     # add in the image of the object
-    img = load_galaxy_image(this_object_image)
+    img = load_galaxy_image(this_object_image,
+                            outdir,
+                            bucket_client=bucket_client)
 
     if img is not None:
 
