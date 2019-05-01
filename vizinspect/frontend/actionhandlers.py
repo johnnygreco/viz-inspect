@@ -193,8 +193,8 @@ def worker_get_object(
 def worker_get_objects(
         review_status='all',
         userid=None,
-        start_keyid=0,
-        end_keyid=50,
+        page=0,
+        rows_per_page=100,
         getinfo='objectids'
 ):
     '''
@@ -206,6 +206,30 @@ def worker_get_objects(
 
         currproc = mp.current_process()
         conn, meta = currproc.connection, currproc.metadata
+
+        # figure out the page slices by looking up the object count
+        list_count = catalogs.get_object_count(
+            (conn, meta),
+            review_status=review_status,
+            userid=userid,
+        )
+        if (list_count % rows_per_page):
+            n_pages = int(list_count/rows_per_page) + 1
+        else:
+            n_pages = int(list_count/rows_per_page)
+
+        page_slices = [
+            [x*rows_per_page,
+             x*rows_per_page+rows_per_page]
+            for x in range(n_pages)
+        ]
+
+        # figure out start and key ids for this page slice
+        try:
+            start_keyid, end_keyid = page_slices[page]
+        except Exception as e:
+            LOGGER.error("Invalid page specified: %s" % page)
+            start_keyid, end_keyid = 0, 100
 
         # this returns a list of dicts {'objectid': <objectid>}
         objectlist, ret_start_keyid, ret_end_keyid = catalogs.get_objects(
@@ -226,6 +250,10 @@ def worker_get_objects(
             'objectlist': list(set(returned_objectlist)),
             'start_keyid':ret_start_keyid,
             'end_keyid':ret_end_keyid,
+            'object_count':list_count,
+            'rows_per_page':rows_per_page,
+            'n_pages':n_pages,
+            'curr_page':page,
         }
 
         return retdict
@@ -359,7 +387,8 @@ def worker_list_review_assignments(
              userid=None,
              start_keyid=unassigned_start_keyid,
              end_keyid=unassigned_end_keyid,
-             getinfo='objectids'
+             getinfo='objectids',
+             fast_fetch=True
         )
 
         (assigned_objects,
@@ -370,23 +399,23 @@ def worker_list_review_assignments(
              userid=None,
              start_keyid=assigned_start_keyid,
              end_keyid=assigned_end_keyid,
-             getinfo='review-assignments'
+             getinfo='review-assignments',
+             fast_fetch=True
         )
 
-        unassigned_objects = list(set([x['objectid']
+        unassigned_objects = list(set([x[0]
                                        for x in unassigned_objects]))
 
         assigned_objectdict = {}
         for x in assigned_objects:
 
-            if x['reviewer_userid'] not in assigned_objectdict:
+            if x[1] and x[1] not in assigned_objectdict:
 
-                assigned_objectdict[x['reviewer_userid']] = {x['objectid']}
+                assigned_objectdict[x[1]] = {x[0]}
 
-            else:
-
-                assigned_objectdict[x['reviewer_userid']].add(
-                    x['objectid']
+            elif x[1]:
+                assigned_objectdict[x[1]].add(
+                    x[0]
                 )
 
         for key in assigned_objectdict:
@@ -497,17 +526,17 @@ class ObjectListHandler(BaseHandler):
             - 'unreviewed-all' -> all objects that have not been reviewed
             - 'reviewed-self' -> objects reviewed by this user
             - 'reviewed-other' -> objects reviewed by other users
-            - 'unreviewed-self' -> objects reviewed by this user
-            - 'unreviewed-other' -> objects reviewed by other users
+            - 'assigned-self' -> objects assigned to this user
+            - 'assigned-reviewed' -> objects assigned to self and reviewed
+            - 'assigned-unreviewed' -> objects assigned to self but unreviewed
+            - 'assigned-all' -> all objects assigned to some reviewer
+            - 'unassigned-all' -> all objects not assigned to any reviewers
 
             For -self retrieval types, we'll get the userid out of the session
             dict.
 
-        start_keyid : int, optional, default = 0
-            The first object keyid to retrieve. Useful for pagination.
-
-        end_keyid : int, optional, default = 50
-            The last object keyid to retrieve. Useful for pagination.
+        page : int, optional, default = 0
+           The page number to retrieve.
 
         '''
 
@@ -549,21 +578,13 @@ class ObjectListHandler(BaseHandler):
                 raise ValueError("Unknown review status requested: '%s'" %
                                  review_status)
 
-            start_keyid = xhtml_escape(self.get_argument('start_keyid', '0'))
-            end_keyid = xhtml_escape(self.get_argument('end_keyid', '50'))
-
-            start_keyid = int(start_keyid)
-            if end_keyid in ('none', 'null'):
-                end_keyid = None
-            else:
-                end_keyid = int(end_keyid)
+            page = int(xhtml_escape(self.get_argument('page', '0')))
 
             objectlist_info = yield self.executor.submit(
                 worker_get_objects,
                 review_status=review_status,
                 userid=self.current_user['user_id'],
-                start_keyid=start_keyid,
-                end_keyid=end_keyid,
+                page=page,
                 getinfo='objectids',
             )
 
@@ -995,7 +1016,7 @@ class ReviewAssignmentHandler(BaseHandler):
 
     @gen.coroutine
     def post(self):
-        '''This handles the POST to /admin/review-assign.
+        '''This handles the POST to /api/review-assign.
 
         '''
         if not self.current_user:

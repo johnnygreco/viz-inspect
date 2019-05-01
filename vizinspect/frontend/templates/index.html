@@ -257,7 +257,7 @@
 
       <div class="row mt-2 justify-content-center">
         <div class="col-6 d-flex justify-content-center">
-          <h6>List page</h6>
+          <h6>List pages: <span id="current-list-npages"></span></h6>
         </div>
       </div>
 
@@ -356,8 +356,7 @@
     {% if current_user['user_role'] in ('authenticated','staff','superuser') %}
 
     // fire the main handler
-    // get 50 objects per page
-    review.get_object_list('all',0,100,true);
+    review.get_object_list('all', 0, 'first');
 
     {% end %}
 

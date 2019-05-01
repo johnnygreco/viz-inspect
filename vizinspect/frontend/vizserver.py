@@ -196,7 +196,7 @@ def setup_worker(siteinfo):
 
     '''
 
-    from ..backend import database
+    from ..backend import database, catalogs
 
     # unregister interrupt signals so they don't get to the worker
     # and the executor can kill them cleanly (hopefully)
@@ -531,6 +531,22 @@ def main():
             random_sample_percent = float(random_sample_percent)
 
         SITEINFO['random_sample_percent'] = random_sample_percent
+
+        # ask for the rows per page
+        LOGGER.info("To make the server more responsive, "
+                    "object lists will be paginated.")
+        default_rows_per_page = 100
+        rows_per_page = input(
+            "Number of objects per page to use "
+            "[integer, default: %i]: " %
+            default_rows_per_page
+        )
+        if not rows_per_page or len(rows_per_page.strip()) == 0:
+            rows_per_page = default_rows_per_page
+        else:
+            rows_per_page = float(rows_per_page)
+
+        SITEINFO['rows_per_page'] = rows_per_page
 
 
         #

@@ -14,6 +14,7 @@ These are Tornado handlers for the index pages.
 import logging
 import numpy as np
 from datetime import datetime
+import copy
 
 # for generating encrypted token information
 from cryptography.fernet import Fernet
@@ -130,11 +131,17 @@ class IndexHandler(BaseHandler):
 
         '''
 
+        redacted_siteinfo = copy.deepcopy(self.siteinfo)
+        del redacted_siteinfo['access_token']
+        del redacted_siteinfo['secret_key']
+        del redacted_siteinfo['region']
+        del redacted_siteinfo['endpoint']
+
         self.render(
             'index.html',
             flash_messages=self.render_flash_messages(),
             user_account_box=self.render_user_account_box(),
             page_title='viz-inspect',
-            siteinfo=self.siteinfo,
+            siteinfo=redacted_siteinfo,
             current_user=self.current_user,
         )

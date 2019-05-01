@@ -63,7 +63,7 @@ except Exception as e:
 
     utc = UTC()
 
-from sqlalchemy import select, update, func
+from sqlalchemy import select, update, func, distinct
 from sqlalchemy.dialects import postgresql as pg
 
 import markdown
@@ -301,6 +301,114 @@ def load_catalog(catalog_fpath,
 ########################################
 ## GETTING OBJECTS OUT OF THE CATALOG ##
 ########################################
+
+def get_object_count(
+        dbinfo,
+        review_status='all',
+        userid=None,
+        dbkwargs=None
+):
+    '''
+    This counts all objects in the database.
+
+    '''
+
+    #
+    # get the database
+    #
+    dbref, dbmeta = dbinfo
+    if not dbkwargs:
+        dbkwargs = {}
+    if isinstance(dbref, str) and 'postgres' in dbref:
+        if not dbkwargs:
+            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
+        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
+            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
+        elif dbkwargs and 'engine_kwargs' in dbkwargs:
+            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
+        engine, conn, meta = get_postgres_db(dbref,
+                                             dbmeta,
+                                             **dbkwargs)
+    elif isinstance(dbref, str) and 'postgres' not in dbref:
+        raise NotImplementedError(
+            "PIPE-TrEx currently doesn't support non-Postgres databases."
+        )
+    else:
+        engine, conn, meta = None, dbref, dbmeta
+        meta.bind = conn
+    #
+    # end of database get
+    #
+
+    # prepare the select
+    object_catalog = meta.tables['object_catalog']
+    object_comments = meta.tables['object_comments']
+
+    join = object_catalog.outerjoin(object_comments)
+
+    sel = select(
+        [func.count(distinct(object_catalog.c.id))]
+    ).select_from(join)
+
+    # figure out the where condition
+    if review_status == 'unreviewed-all':
+        actual_sel = sel.where(object_comments.c.added == None)
+    elif review_status == 'reviewed-all':
+        actual_sel = sel.where(object_comments.c.added != None)
+
+    elif review_status == 'reviewed-self' and userid is not None:
+        actual_sel = sel.where(
+            object_comments.c.userid == userid
+        ).where(
+            object_comments.c.added != None
+        )
+    elif review_status == 'reviewed-other' and userid is not None:
+        actual_sel = sel.where(
+            object_comments.c.userid != userid
+        ).where(
+            object_comments.c.added != None
+        )
+    elif review_status == 'assigned-self' and userid is not None:
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid == userid
+        )
+    elif review_status == 'assigned-reviewed' and userid is not None:
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid == userid
+        ).where(
+            object_comments.c.added != None
+        )
+    elif review_status == 'assigned-unreviewed' and userid is not None:
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid == userid
+        ).where(
+            object_comments.c.added == None
+        )
+    elif review_status == 'assigned-all':
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid != None
+        )
+    elif review_status == 'unassigned-all':
+        actual_sel = sel.where(
+            object_catalog.c.reviewer_userid == None
+        )
+    else:
+        actual_sel = sel
+
+    with conn.begin():
+        res = conn.execute(actual_sel)
+        count = res.scalar()
+
+    # close everything down if we were passed a database URL only and had to
+    # make a new engine
+    if engine:
+        conn.close()
+        meta.bind = None
+        engine.dispose()
+
+    return count
+
+
 
 def get_object(objectid,
                dbinfo,

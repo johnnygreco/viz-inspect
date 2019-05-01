@@ -313,33 +313,14 @@ var ui = {
     // handle the next object link
     $('#next-object-link').on('click', function (evt) {
 
-      // find the previous object in the objectlist
-      let this_object_index = review.objectlist.indexOf(review.current_objectid);
-
-      // only move if the current object is not at the end of the list
-      if (this_object_index != (review.objectlist.length-1)) {
-
-        let next_objectid = review.objectlist[this_object_index+1];
-        review.get_object(next_objectid);
-
-      }
+      review.get_next_object();
 
     });
 
     // handle the previous object link
     $('#prev-object-link').on('click', function (evt) {
 
-      // find the previous object in the objectlist
-      let this_object_index = review.objectlist.indexOf(review.current_objectid);
-
-      // only move if the current object is not at the start of the list
-      if ( (this_object_index != 0) ) {
-
-        let prev_objectid = review.objectlist[this_object_index-1];
-        review.get_object(prev_objectid);
-
-      }
-
+      review.get_prev_object();
 
     });
 
@@ -351,7 +332,7 @@ var ui = {
       if (!isNaN(jump_to)) {
 
         // fire the get object function
-        review.get_object(jump_to);
+        ui.debounce(review.get_object(jump_to), 200);
 
       }
 
@@ -367,7 +348,7 @@ var ui = {
         if (!isNaN(jump_to)) {
 
           // fire the get object function
-          ui.debounce(review.get_object(jump_to), 250);
+          ui.debounce(review.get_object(jump_to), 200);
 
         }
 
@@ -381,38 +362,108 @@ var ui = {
       evt.preventDefault();
 
       let this_objectid = $(this).attr('data-objectid');
-      review.get_object(this_objectid);
+      ui.debounce(review.get_object(this_objectid), 200);
 
     });
 
     // handle selecting a object-view type
+    // this auto-loads the first object in the specified list
     $('#objectlist-pref-select').on('change', function (evt) {
 
       let selected = $(this).val();
 
       if (selected === 'reviewed-all') {
-        review.get_object_list('reviewed-all', 0, 100, false);
+        ui.debounce(review.get_object_list('reviewed-all', 0, 'first'), 100);
       }
       else if (selected === 'unreviewed-all') {
-        review.get_object_list('unreviewed-all', 0, 100, false);
+        ui.debounce(review.get_object_list('unreviewed-all', 0, 'first'), 100);
       }
       else if (selected === 'reviewed-self') {
-        review.get_object_list('reviewed-self', 0, 100, false);
+        ui.debounce(review.get_object_list('reviewed-self', 0, 'first'), 100);
       }
       else if (selected === 'reviewed-other') {
-        review.get_object_list('reviewed-other', 0, 100, false);
+        ui.debounce(review.get_object_list('reviewed-other', 0, 'first'),100);
       }
       else if (selected === 'assigned-self') {
-        review.get_object_list('assigned-self', 0, 100, false);
+        ui.debounce(review.get_object_list('assigned-self', 0, 'first'), 100);
       }
       else if (selected === 'assigned-reviewed') {
-        review.get_object_list('assigned-reviewed', 0, 100, false);
+        ui.debounce(review.get_object_list('assigned-reviewed', 0, 'first'), 100);
       }
       else if (selected === 'assigned-unreviewed') {
-        review.get_object_list('assigned-unreviewed', 0, 100, false);
+        ui.debounce(review.get_object_list('assigned-unreviewed', 0, 'first'), 100);
       }
       else {
-        review.get_object_list('all', 0, 100, false);
+        ui.debounce(review.get_object_list('all', 0, 'first'), 100);
+      }
+
+    });
+
+    $('#next-list-page').on('click', function (evt) {
+
+      if (review.current_page < review.current_npages) {
+        ui.debounce(
+          review.get_object_list(
+            review.current_reviewstatus,
+            review.current_page + 1,
+            'first'
+          ),
+          100
+        );
+      }
+
+    });
+
+    $('#prev-list-page').on('click', function (evt) {
+
+      if (review.current_page > 0) {
+        ui.debounce(
+          review.get_object_list(
+            review.current_reviewstatus,
+            review.current_page - 1,
+            'last'
+          ),
+          100
+        );
+      }
+
+    });
+
+    $('#jump-to-list-page').on('click', function (evt) {
+
+      let page_to_jump_to = $('#current-list-page').val();
+
+      if (page_to_jump_to >= 0 && page_to_jump_to < review.current_npages) {
+        ui.debounce(
+          review.get_object_list(
+            review.current_reviewstatus,
+            page_to_jump_to,
+            'first'
+          ),
+          100
+        );
+      }
+
+    });
+
+    // handle enter key in the jump box
+    $('#current-list-page').on('keyup', function (evt) {
+
+      if (evt.keyCode == 13) {
+
+        let page_to_jump_to = $(this).val();
+
+        if (page_to_jump_to >= 0 && page_to_jump_to < review.current_npages) {
+          ui.debounce(
+            review.get_object_list(
+              review.current_reviewstatus,
+              page_to_jump_to,
+              'first'
+            ),
+            100
+          );
+        }
+
       }
 
     });
@@ -434,7 +485,7 @@ var ui = {
         let this_objectid = review.current_objectid;
 
         // fire the save object handler
-        ui.debounce(review.save_object_comments_flags(this_objectid, true), 250);
+        ui.debounce(review.save_object_comments_flags(this_objectid, true), 200);
 
       }
 
@@ -450,11 +501,12 @@ var ui = {
       let this_objectid = review.current_objectid;
 
       // fire the save object handler
-      ui.debounce(review.save_object_comments_flags(this_objectid), 250);
+      ui.debounce(review.save_object_comments_flags(this_objectid), 200);
 
     });
 
   }
+
 
 };
 
@@ -467,18 +519,24 @@ var review = {
   current_keyid: null,
   current_readonly: null,
 
+
   objectlist: null,
   objectlist_start_keyid: null,
   objectlist_end_keyid: null,
 
-  // this fetches the full object list. if load_first_object is true, will load
-  // the first object in the list right after fetching the list
-  get_object_list: function (review_status,
-                             start_keyid,
-                             end_keyid,
-                             load_first_object) {
+  current_page: null,
+  current_objectcount: null,
+  current_npages: null,
+  current_rows_per_page: null,
+  current_reviewstatus: null,
 
-    let url = `/api/list-objects?review_status=${review_status}&start_keyid=${start_keyid}&end_keyid=${end_keyid}`;
+  // this fetches the full object list. if load_object is true, will load
+  // the appropriate object in the list right after fetching the list
+  get_object_list: function (review_status,
+                             page,
+                             load_object) {
+
+    let url = `/api/list-objects?review_status=${review_status}&page=${page}`;
 
     $.getJSON(url, function (data) {
 
@@ -492,9 +550,15 @@ var review = {
         review.objectlist = result.objectlist;
         review.objectlist_start_keyid = result.start_keyid;
         review.objectlist_end_keyid = result.end_keyid;
+        review.current_page = result.curr_page;
+        review.current_objectcount = result.object_count;
+        review.current_npages = result.n_pages;
+        review.current_rows_per_page = result.rows_per_page;
+        review.current_reviewstatus = review_status;
+
+        // populate the object list on the page
 
         $('#objectid-list').empty();
-
         for (let objectid of review.objectlist) {
 
           let this_elem =
@@ -502,6 +566,9 @@ var review = {
           $('#objectid-list').append(this_elem);
 
         }
+
+        $('#current-list-page').val(review.current_page);
+        $('#current-list-npages').html(review.current_npages);
 
       }
 
@@ -516,10 +583,16 @@ var review = {
 
     }).done(function (xhr) {
 
-      // get the first object if load_first_object is true
-      if (load_first_object === true) {
+      // get the appropriate object if load_object is not undefined
+      if (load_object === 'first') {
 
         review.get_object(review.objectlist[0]);
+
+      }
+
+      else if (load_object === 'last') {
+
+        review.get_object(review.objectlist[review.objectlist.length-1]);
 
       }
 
@@ -751,6 +824,62 @@ ${item}
   },
 
 
+  get_next_object: function () {
+
+    // find the current object in the objectlist
+    let this_object_index = review.objectlist.indexOf(review.current_objectid);
+
+    // move if the current object is not at the end of the list
+    if (this_object_index != (review.objectlist.length-1)) {
+
+      let next_objectid = review.objectlist[this_object_index+1];
+      review.get_object(next_objectid);
+
+    }
+
+    // if this object is at the end of the current list, check if there's
+    // another page and move there
+    else if ( (this_object_index == (review.objectlist.length-1)) &&
+              (review.current_page < review.current_npages) ) {
+
+      // load the next objectlist and the first element there
+      review.get_object_list(review.current_reviewstatus,
+                            review.current_page + 1,
+                            'first');
+
+    }
+
+  },
+
+
+  get_prev_object: function () {
+
+    // find the current object in the objectlist
+    let this_object_index = review.objectlist.indexOf(review.current_objectid);
+
+    // move if the current object is not at the end of the list
+    if (this_object_index != 0) {
+
+      let prev_objectid = review.objectlist[this_object_index-1];
+      review.get_object(prev_objectid);
+
+    }
+
+    // if this object is at the start of the current list, check if there's
+    // another page behind us and move there
+    else if ( (this_object_index == 0) &&
+              (review.current_page > 0) ) {
+
+      // load the prev objectlist and the last element there
+      review.get_object_list(review.current_reviewstatus,
+                            review.current_page - 1,
+                            'last');
+
+    }
+
+  },
+
+
   save_object_comments_flags: function (objectid, jump_to_next) {
 
     let _xsrf;
@@ -807,8 +936,7 @@ ${item}
       let objectlist_reviewtype = $('#objectlist-pref-select').val();
       review.get_object_list(
         objectlist_reviewtype,
-        review.objectlist_start_keyid,
-        review.objectlist_end_keyid
+        review.current_page,
       );
 
     }).done(function () {
@@ -816,16 +944,7 @@ ${item}
       // jump to the next object if told to do so
       if (jump_to_next !== undefined && jump_to_next === true) {
 
-        // find the previous object in the objectlist
-        let this_object_index = review.objectlist.indexOf(objectid);
-
-        // only move if the current object is not at the end of the list
-        if (this_object_index != (review.objectlist.length-1)) {
-
-          let next_objectid = review.objectlist[this_object_index+1];
-          review.get_object(next_objectid);
-
-        }
+        review.get_next_object();
 
       }
 
