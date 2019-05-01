@@ -16,6 +16,8 @@ import os.path
 import multiprocessing as mp
 import json
 from datetime import datetime
+import pathlib
+
 import numpy as np
 
 
@@ -86,7 +88,12 @@ from ..backend import catalogs, images
 ## WORKER FUNCTIONS ##
 ######################
 
-def worker_get_object(objectid, basedir, userid):
+def worker_get_object(
+        objectid,
+        basedir,
+        userid,
+        random_sample_percent=2.0,
+):
     '''
     This does the actual work of loading the object.
 
@@ -142,11 +149,13 @@ def worker_get_object(objectid, basedir, userid):
         )
 
         if not os.path.exists(objectplot):
+
             made_plot = images.make_main_plot(
                 objectid,
                 (conn, meta),
                 os.path.join(basedir, 'viz-inspect-data'),
                 bucket_client=currproc.bucket_client,
+                random_sample_percent=random_sample_percent,
             )
             objectplot = os.path.abspath(made_plot)
 
@@ -169,6 +178,10 @@ def worker_get_object(objectid, basedir, userid):
             'comments':comments,
             'readonly':readonly
         }
+
+        # touch the plot file so we know it was recently accessed and the cache
+        # won't evict it because it's accessed often
+        pathlib.Path(objectplot).touch()
 
         return retdict
 
@@ -658,6 +671,7 @@ class LoadObjectHandler(BaseHandler):
                 objindex,
                 self.basedir,
                 self.current_user['user_id'],
+                random_sample_percent=self.siteinfo['random_sample_percent']
             )
 
             if objectinfo is not None:

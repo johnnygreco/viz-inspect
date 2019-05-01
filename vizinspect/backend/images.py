@@ -37,6 +37,7 @@ LOGEXCEPTION = LOGGER.exception
 #############
 
 import os.path
+import pathlib
 
 import numpy as np
 import numpy.random as npr
@@ -106,6 +107,7 @@ def load_galaxy_image(image_file,
             use_image_file = download_to
             LOGINFO('Using local cached copy of %s.' % image_file)
 
+
         else:
 
             use_image_file = bucketstorage.get_file(
@@ -123,10 +125,17 @@ def load_galaxy_image(image_file,
 
     # finally, load the image
     try:
+
         image = mpimg.imread(use_image_file)
+
+        # touch this file so we know it was recently accessed and won't get
+        # evicted from the cache if it's accessed often
+        pathlib.Path(use_image_file).touch()
+
         return image
 
     except Exception as e:
+
         LOGEXCEPTION('could not load the requested image: %s' % image_file)
         return None
 
@@ -146,7 +155,7 @@ def make_main_plot(
         reff_plot_xlim=None,
         reff_plot_ylim=None,
         random_sample=None,
-        random_sample_percent=2.5,
+        random_sample_percent=2.0,
         bucket_client=None,
 ):
     '''This generates the main plot.

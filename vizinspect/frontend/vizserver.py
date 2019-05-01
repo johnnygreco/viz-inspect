@@ -497,9 +497,8 @@ def main():
             SITEINFO['images_are_remote'] = False
 
 
-        # finally, ask for the length of time in days that downloaded images
+        # ask for the length of time in days that downloaded images
         # and generated plots will be left around
-
         LOGGER.info("To save local disk space, "
                     "older generated plots and downloaded "
                     "remote images will be periodically deleted.")
@@ -514,6 +513,25 @@ def main():
             retention_days = int(retention_days)
 
         SITEINFO['retention_days'] = retention_days
+
+        # ask for the sampling percentage of the object rows to use for the
+        # plots
+        LOGGER.info("To make the server more responsive, "
+                    "only a certain percentage of objects in the "
+                    "database will be used to make plots.")
+        default_random_sample_percent = 2.0
+        random_sample_percent = input(
+            "Percentage of rows to randomly sample for plots "
+            "[1.0-100.0, default: %.1f]: " %
+            default_random_sample_percent
+        )
+        if not random_sample_percent or len(random_sample_percent.strip()) == 0:
+            random_sample_percent = default_random_sample_percent
+        else:
+            random_sample_percent = float(random_sample_percent)
+
+        SITEINFO['random_sample_percent'] = random_sample_percent
+
 
         #
         # done with config
