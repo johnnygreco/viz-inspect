@@ -172,6 +172,19 @@ define('flagkeys',
        help=("This tells the server what object flags to use for the catalog."),
        type=str)
 
+define('overwrite',
+       default=False,
+       help=("This tells the server to overwrite "
+             "existing catalog objects if new ones have the same objectid."),
+       type=bool)
+
+define('firststart',
+       default=False,
+       help=("This tells the server to assume "
+             "that we're starting over from scratch "
+             "and to recreate all the DBs, etc.."),
+       type=bool)
+
 
 
 ###########
@@ -305,7 +318,7 @@ def main():
 
     # on the first start, the server should ask for a catalog CSV and the flag
     # values
-    if not first_start_done:
+    if not first_start_done or options.firststart:
 
         import shutil
 
@@ -375,8 +388,13 @@ def main():
 
         else:
 
-            LOGGER.info("First time setup requires an "
-                        "image directory to load HUGS images from.")
+            LOGGER.info(
+                "First time setup requires an "
+                "image directory to load HUGS images from. "
+                "If your images are in a Digital Ocean Spaces bucket, "
+                "use 'dos://<bucket-name>' here. "
+                "If your images are on AWS S3, use 's3://<bucket-name>' here."
+            )
             image_dir = input("HUGS image directory location: ")
 
         # 3. confirm the database_url in the site-info.json file
@@ -389,6 +407,58 @@ def main():
         else:
             set_database_url = database_url
             SITEINFO['database_url'] = set_database_url
+
+        # 4. if the image directory indicates it's dos:// or s3://, ask for
+        # credentials for the service, the
+        if image_dir.startswith('s3://') or image_dir.startswith('dos://'):
+
+            LOGGER.info(
+                "Image directory is '%s'. "
+                "An access token and secret key pair is required." % image_dir
+            )
+            access_token = input("Access Token for '%s': " % image_dir)
+            secret_key = input("Secret Key for '%s': " % image_dir)
+
+            LOGGER.info("We also need a region and endpoint URL.")
+
+            default_dos_region = 'sfo2'
+            default_dos_endpoint = 'https://sfo2.digitaloceanspaces.com'
+            default_s3_region = 'us-east-1'
+            default_s3_endpoint = 'https://s3.amazonaws.com'
+
+            if image_dir.startswith('dos://'):
+                region = input("Region [default: %s]: " % default_dos_region)
+                if not region or len(region.strip()) == 0:
+                    region = default_dos_region
+                endpoint = input(
+                    "Endpoint [default: %s]: " % default_dos_endpoint
+                )
+                if not endpoint or len(endpoint.strip()) == 0:
+                    endpoint = default_dos_endpoint
+
+            elif image_dir.startswith('s3://'):
+                region = input("Region [default: %s]: " % default_s3_region)
+                if not region or len(region.strip()) == 0:
+                    region = default_s3_region
+                endpoint = input(
+                    "Endpoint [default: %s]: " % default_s3_endpoint
+                )
+                if not endpoint or len(endpoint.strip()) == 0:
+                    endpoint = default_s3_endpoint
+
+            # update the site-info.json file with these values
+            SITEINFO['access_token'] = access_token
+            SITEINFO['secret_key'] = secret_key
+            SITEINFO['region'] = region
+            SITEINFO['endpoint'] = endpoint
+
+        else:
+
+            SITEINFO['access_token'] = None
+            SITEINFO['secret_key'] = None
+            SITEINFO['region'] = None
+            SITEINFO['endpoint'] = None
+
 
         # update the site-info.json file
         with open(siteinfojson,'w') as outfd:
@@ -404,6 +474,18 @@ def main():
             LOGGER.warning("The required tables already exist. "
                            "Will add this catalog to them.")
 
+            # ask if existing objects should be overwritten
+            overwrite_ask = input(
+                "Should existing objects be overwritten? [Y/n]: "
+            )
+            if not overwrite_ask or len(overwrite_ask.strip()) == 0:
+                overwrite = True
+            elif overwrite_ask.strip().lower() == 'n':
+                overwrite = False
+            else:
+                overwrite = True
+
+
         LOGGER.info("Loading objects. Using provided flag keys: %s" %
                     options.flagkeys)
         loaded = catalogs.load_catalog(
@@ -411,6 +493,7 @@ def main():
             image_dir,
             (set_database_url,
              database.VIZINSPECT),
+            overwrite=overwrite,
             flags_to_use=options.flagkeys.split(','))
 
         if loaded:
@@ -423,6 +506,8 @@ def main():
         with open(first_start_done_file,'w') as outfd:
             outfd.write('server set up in this directory on %s UTC\n' %
                         datetime.utcnow().isoformat())
+
+        LOGGER.info("First run setup for vizserver complete.")
 
 
     #

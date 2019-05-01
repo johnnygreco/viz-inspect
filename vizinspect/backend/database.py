@@ -57,7 +57,7 @@ Catalog = Table(
     VIZINSPECT,
     Column('imageid', Integer, primary_key=True, nullable=False),
     Column('objectid', Integer, ForeignKey('object_catalog.objectid'),
-           nullable=False, index=True),
+           nullable=False, index=True, unique=True),
     Column('added', TIMESTAMP(timezone=True),
            nullable=False, index=True,
            default=datetime.utcnow()),

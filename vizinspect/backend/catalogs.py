@@ -69,6 +69,8 @@ from sqlalchemy.dialects import postgresql as pg
 import markdown
 import bleach
 
+from tqdm import tqdm
+
 from .database import get_postgres_db, json_dumps
 
 
@@ -79,6 +81,7 @@ from .database import get_postgres_db, json_dumps
 def load_catalog(catalog_fpath,
                  images_dpath,
                  dbinfo,
+                 overwrite=False,
                  dbkwargs=None,
                  object_imagefile_pattern='hugs-{objectid}.png',
                  flags_to_use=('candy','junk','tidal','cirrus'),
@@ -92,7 +95,12 @@ def load_catalog(catalog_fpath,
         The path to the CSV to load.
 
     images_dpath : str
-        The path to the images directory.
+        The path to the images directory. If this starts with 'dos://', this
+        function will assume that the images are in a Digital Ocean Space. In
+        this case, the images_dpath should include the bucket name and be of the
+        following form::
+
+            'dos://<bucket-name>'
 
     dbinfo : tuple
         This is a tuple of two items:
@@ -102,6 +110,9 @@ def load_catalog(catalog_fpath,
 
         If the database URL is provided, a new engine will be used. If the
         connection itself is provided, it will be re-used.
+
+    overwrite : bool
+        If True, will overwrite existing objects with the same objectid.
 
     dbkwargs : dict or None
         A dict of kwargs to pass to the database open function.
@@ -173,43 +184,73 @@ def load_catalog(catalog_fpath,
         x['extra_columns'] = y
         x['added'] = now
         x['updated'] = now
-        x['objectid'] = y['cat-id']
+        x['objectid'] = y['viz-id']
         x['user_flags'] = {x: False for x in flags_to_use}
 
     # get the table
     object_catalog = meta.tables['object_catalog']
 
-    # prepare the insert
-    insert = pg.insert(
-        object_catalog
-    ).values(
-        main_cols
-    )
 
     # execute the inserts
     with conn.begin():
 
         LOGINFO("Inserting object rows...")
 
-        # insert the object rows
-        conn.execute(insert)
+        for row in tqdm(main_cols):
+
+            # prepare the insert
+            insert = pg.insert(
+                object_catalog
+            ).values(
+                row
+            )
+
+            if overwrite:
+                insert = insert.on_conflict_do_update(
+                    index_elements=[object_catalog.c.objectid],
+                    set_={'updated':now,
+                          'user_flags':row['user_flags'],
+                          'extra_columns':row['extra_columns'],
+                          'ra':row['ra'],
+                          'dec':row['dec']}
+                )
+
+            # insert the object rows
+            conn.execute(insert)
 
         LOGINFO("Inserting object image file paths...")
 
-        print(main_cols)
-        # look up the images for each object
-        object_images = [
-            os.path.join(
-                images_dpath,
-                object_imagefile_pattern.format(
-                    objectid=int(x['objectid'])
-                )
-            ) for x in main_cols
-        ]
-        object_images = [
-            (os.path.abspath(x) if os.path.exists(x) else None)
-            for x in object_images
-        ]
+        # here, if the images are all remote, then we don't check if they exist
+        # locally. the server frontend will take care of getting them later.
+        if images_dpath.startswith('dos://'):
+
+            object_images = [
+                '%s/%s' % (
+                    images_dpath.rstrip('/'),
+                    object_imagefile_pattern.format(
+                        objectid=int(x['objectid'])
+                    )
+                ) for x in main_cols
+            ]
+
+        # otherwise, the images are in a local directory
+        else:
+
+            # look up the images for each object
+            object_images = [
+                os.path.join(
+                    images_dpath,
+                    object_imagefile_pattern.format(
+                        objectid=int(x['objectid'])
+                    )
+                ) for x in main_cols
+            ]
+
+            object_images = [
+                (os.path.abspath(x) if os.path.exists(x) else None)
+                for x in object_images
+            ]
+
 
         # generate the object insertion rows
         image_cols = [
@@ -223,14 +264,25 @@ def load_catalog(catalog_fpath,
         # get the table
         object_images = meta.tables['object_images']
 
-        # prepare the insert
-        insert = pg.insert(
-            object_images
-        ).values(
-            image_cols
-        )
+        for row in tqdm(image_cols):
 
-        conn.execute(insert)
+            # prepare the insert
+            insert = pg.insert(
+                object_images
+            ).values(
+                row
+            )
+
+            if overwrite:
+                insert = insert.on_conflict_do_update(
+                    index_elements=[object_images.c.objectid],
+                    set_={
+                        'updated':now,
+                        'filepath':row['filepath']
+                    }
+                )
+
+            conn.execute(insert)
 
 
     # close everything down if we were passed a database URL only and had to
@@ -352,6 +404,7 @@ def get_object(objectid,
     return rows
 
 
+
 def get_objects(
         dbinfo,
         review_status='all',
@@ -386,8 +439,11 @@ def get_objects(
         - 'unreviewed-all' -> all objects that have not been reviewed
         - 'reviewed-self' -> objects reviewed by this user
         - 'reviewed-other' -> objects reviewed by other users
-        - 'unreviewed-self' -> objects reviewed by this user
-        - 'unreviewed-other' -> objects reviewed by other users
+        - 'assigned-self' -> objects assigned to this user
+        - 'assigned-reviewed' -> objects assigned to self and reviewed
+        - 'assigned-unreviewed' -> objects assigned to self but unreviewed
+        - 'assigned-all' -> all objects assigned to some reviewer
+        - 'unassigned-all' -> all objects not assigned to any reviewers
 
     userid : int
         If set, sets the current userid to use in the filters when review_status
