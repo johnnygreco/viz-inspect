@@ -15,3 +15,4 @@ matplotlib>=2.0
 astropy>=3.0
 diskcache>=3.0.6
 psycopg2
+boto3
