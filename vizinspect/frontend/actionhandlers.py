@@ -145,7 +145,8 @@ def worker_get_object(objectid, basedir, userid):
             made_plot = images.make_main_plot(
                 objectid,
                 (conn, meta),
-                os.path.join(basedir, 'viz-inspect-data')
+                os.path.join(basedir, 'viz-inspect-data'),
+                bucket_client=currproc.bucket_client,
             )
             objectplot = os.path.abspath(made_plot)
 

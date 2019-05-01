@@ -70,8 +70,14 @@ def client(
 
     '''
 
-    with open(keyfile,'r') as infd:
-        access_token, secret_key = infd.read().strip('\n').split()
+    if isinstance(keyfile, str):
+
+        with open(keyfile,'r') as infd:
+            access_token, secret_key = infd.read().strip('\n').split()
+
+    elif isinstance(keyfile, (tuple,list)):
+        access_token, secret_key = keyfile
+
 
     session = boto3.Session()
     client = session.client(
