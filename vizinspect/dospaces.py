@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# dospaces.py - Waqas Bhatti (wbhatti@astro.princeton.edu) - Apr 2019
+# bucketstorage.py - Waqas Bhatti (wbhatti@astro.princeton.edu) - Apr 2019
 # License: MIT - see the LICENSE file for the full text.
 
-"""
-This contains functions that handle Digital Ocean Spaces operations.
+"""This contains functions that handle AWS S3/Digital Ocean
+Spaces/S3-compatible bucket operations.
 
 """
 
@@ -49,15 +49,24 @@ import boto3
 ## SPACES OPERATIONS ##
 #######################
 
-def client(keyfile,
-           region='sfo2',
-           endpoint='https://sfo2.digitaloceanspaces.com'):
-    '''This makes a new DO Spaces client.
+def client(
+        keyfile,
+        region='sfo2',
+        endpoint='https://sfo2.digitaloceanspaces.com'
+):
+    '''This makes a new bucket client.
 
     Requires a keyfile containing the access token and the secret key in the
     following format::
 
         access_token secret_key
+
+    The default `region` and `endpoint` assume you're using Digital Ocean
+    Spaces.
+
+    If you're using S3, see:
+    https://docs.aws.amazon.com/general/latest/gr/rande.html#s3_region to figure
+    out the values for `region` and `endpoint`.
 
     '''
 
@@ -161,13 +170,13 @@ def get_file(
         raiseonfail=False
 ):
 
-    """This gets a file from an DOS bucket.
+    """This gets a file from abucket.
 
     Parameters
     ----------
 
     bucket : str
-        The DOS bucket name.
+        The bucket name.
 
     filename : str
         The full filename of the file to get from the bucket
@@ -203,7 +212,8 @@ def get_file(
 
     except Exception as e:
 
-        LOGEXCEPTION('could not download dos://%s/%s' % (bucket, filename))
+        LOGEXCEPTION('could not download %s from bucket: %s' %
+                     (filename, bucket))
 
         if raiseonfail:
             raise
@@ -221,16 +231,16 @@ def put_file(
         endpoint=None,
         raiseonfail=False
 ):
-    """This uploads a file to DOS.
+    """This uploads a file to a bucket.
 
     Parameters
     ----------
 
     local_file : str
-        Path to the file to upload to DOS.
+        Path to the file to upload to bucket.
 
     bucket : str
-        The DOS bucket to upload the file to.
+        The bucket to upload the file to.
 
     client : boto3.Client or None
         If None, this function will instantiate a new `boto3.Client` object to
@@ -244,9 +254,8 @@ def put_file(
     Returns
     -------
 
-    str or None
-        If the file upload is successful, returns the dos:// URL of the uploaded
-        file. If it failed, will return None.
+    True
+        If the file upload is successful, returns True
 
     """
 
@@ -255,7 +264,7 @@ def put_file(
 
     try:
         client.upload_file(local_file, bucket, os.path.basename(local_file))
-        return 'dos://%s/%s' % (bucket, os.path.basename(local_file))
+        return True
     except Exception as e:
         LOGEXCEPTION('could not upload %s to bucket: %s' % (local_file,
                                                             bucket))
@@ -263,7 +272,7 @@ def put_file(
         if raiseonfail:
             raise
 
-        return None
+        return False
 
 
 
@@ -276,13 +285,13 @@ def delete_file(
         endpoint=None,
         raiseonfail=False
 ):
-    """This deletes a file from DOS.
+    """This deletes a file from a bucket.
 
     Parameters
     ----------
 
     bucket : str
-        The AWS S3 bucket to delete the file from.
+        The bucket to delete the file from.
 
     filename : str
         The full file name of the file to delete, including any prefixes.
