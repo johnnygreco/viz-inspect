@@ -349,8 +349,12 @@
     // load the user prefs
     ui.prefs = ui.load_cookie_prefs();
 
-    if (ui.prefs.autosave_jump == true) {
-      $('#pref-autosave-next').prop('checked',true);
+    if (ui.prefs !== undefined) {
+
+      if (ui.prefs.autosave_jump == true) {
+        $('#pref-autosave-next').prop('checked',true);
+      }
+
     }
 
     {% if current_user['user_role'] in ('authenticated','staff','superuser') %}
