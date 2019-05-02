@@ -127,7 +127,8 @@ var assignments = {
           let this_user_assigned = assignments.assigned_objects[user_id];
 
           // look up the select associated with this user_id
-          let $user_id_select = $(`#assigned-reviewlist-user_id-${user_id}`);
+          let $user_id_select = $(`#assigned-reviewlist-userid-${user_id}`);
+
           $user_id_select.empty();
 
           for (let objectid of this_user_assigned) {

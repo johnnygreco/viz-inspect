@@ -228,7 +228,11 @@ def worker_get_objects(
         try:
             start_keyid, end_keyid = page_slices[page]
         except Exception as e:
-            LOGGER.error("Invalid page specified: %s" % page)
+            LOGGER.exception(
+                "Invalid page specified: %s, list_count: %s, "
+                "rows_per_page: %s, list_n_pages: %s" %
+                (page, list_count, rows_per_page, n_pages)
+            )
             start_keyid, end_keyid = 0, 100
 
         # this returns a list of dicts {'objectid': <objectid>}
@@ -408,7 +412,11 @@ def worker_list_review_assignments(
                     list_page_slices[list_page]
                 )
             except Exception as e:
-                LOGGER.error("Invalid page specified: %s" % list_page)
+                LOGGER.exception(
+                    "Invalid page specified: %s, list_count: %s, "
+                    "rows_per_page: %s, list_n_pages: %s" %
+                    (list_page, list_count, rows_per_page, list_n_pages)
+                )
                 list_start_keyid, list_end_keyid = 0, rows_per_page
 
             (list_objects,
@@ -465,7 +473,12 @@ def worker_list_review_assignments(
                     list_page_slices[list_page]
                 )
             except Exception as e:
-                LOGGER.error("Invalid page specified: %s" % list_page)
+                LOGGER.exception(
+                    "Invalid page specified: %s, list_count: %s, "
+                    "rows_per_page: %s, list_n_pages: %s, user_id: %s" %
+                    (list_page, list_count, rows_per_page,
+                     list_n_pages, user_id)
+                )
                 list_start_keyid, list_end_keyid = 0, rows_per_page
 
             (list_objects,
@@ -1030,7 +1043,10 @@ class ReviewAssignmentHandler(BaseHandler):
                     user_list = []
 
                 else:
-                    user_list = [x['user_id'] for x in resp['user_info']]
+                    user_list = [
+                        x['user_id'] for x in resp['user_info'] if
+                        x['user_id'] not in (2,3)
+                    ]
 
                 list_type = xhtml_escape(
                     self.get_argument('list_type','unassigned')
