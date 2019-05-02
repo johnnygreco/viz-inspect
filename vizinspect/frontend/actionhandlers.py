@@ -88,6 +88,52 @@ from ..backend import catalogs, images
 ## WORKER FUNCTIONS ##
 ######################
 
+def worker_make_plot(
+        objectid,
+        basedir,
+        random_sample_percent=2.0
+):
+    '''
+    This makes the main plot for a specific objectid.
+
+    '''
+
+    try:
+
+        currproc = mp.current_process()
+        conn, meta = currproc.connection, currproc.metadata
+
+        # get the plot if it exists
+        objectplot = os.path.abspath(
+            os.path.join(
+                basedir,
+                'viz-inspect-data',
+                'plot-objectid-{objectid}.png'.format(objectid=objectid)
+            )
+        )
+
+        if not os.path.exists(objectplot):
+
+            made_plot = images.make_main_plot(
+                objectid,
+                (conn, meta),
+                os.path.join(basedir, 'viz-inspect-data'),
+                bucket_client=currproc.bucket_client,
+                random_sample_percent=random_sample_percent,
+            )
+            objectplot = os.path.abspath(made_plot)
+
+        # touch the plot file so we know it was recently accessed and the cache
+        # won't evict it because it's accessed often
+        pathlib.Path(objectplot).touch()
+
+        return objectplot
+
+    except Exception as e:
+        LOGGER.exception("Could not get info for object: %s" % objectid)
+        return None
+
+
 def worker_get_object(
         objectid,
         basedir,
@@ -130,7 +176,6 @@ def worker_get_object(
                           key=lambda x: x['comment_added_on'],
                           reverse=True)
 
-
         objectinfo_dict = objectinfo[0]
         del objectinfo_dict['comment_added_on']
         del objectinfo_dict['comment_by_userid']
@@ -139,25 +184,11 @@ def worker_get_object(
         del objectinfo_dict['comment_text']
         objectinfo_dict['filepath'] = 'redacted'
 
-        # get the plot if it exists
-        objectplot = os.path.abspath(
-            os.path.join(
-                basedir,
-                'viz-inspect-data',
-                'plot-objectid-{objectid}.png'.format(objectid=objectid)
-            )
+        objectplot = worker_make_plot(
+            objectid,
+            basedir,
+            random_sample_percent=random_sample_percent
         )
-
-        if not os.path.exists(objectplot):
-
-            made_plot = images.make_main_plot(
-                objectid,
-                (conn, meta),
-                os.path.join(basedir, 'viz-inspect-data'),
-                bucket_client=currproc.bucket_client,
-                random_sample_percent=random_sample_percent,
-            )
-            objectplot = os.path.abspath(made_plot)
 
         # set the readonly flag
         if (objectinfo_dict['reviewer_userid'] is not None and
@@ -178,10 +209,6 @@ def worker_get_object(
             'comments':comments,
             'readonly':readonly
         }
-
-        # touch the plot file so we know it was recently accessed and the cache
-        # won't evict it because it's accessed often
-        pathlib.Path(objectplot).touch()
 
         return retdict
 

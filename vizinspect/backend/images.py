@@ -38,6 +38,8 @@ LOGEXCEPTION = LOGGER.exception
 
 import os.path
 import pathlib
+import pickle
+
 
 import numpy as np
 import numpy.random as npr
@@ -156,6 +158,7 @@ def make_main_plot(
         reff_plot_ylim=None,
         random_sample=None,
         random_sample_percent=2.0,
+        save_random_sample=True,
         bucket_client=None,
 ):
     '''This generates the main plot.
@@ -203,6 +206,13 @@ def make_main_plot(
         push the random sampling into the Postgres database itself. This must be
         a float between 0.0 and 100.0 indicating the percentage of rows to
         sample.
+
+    save_random_sample : bool
+        This saves the random sample to a pickle file. If
+        `random_sample_percent` is not None on a subsequent call to this
+        function, this function will attempt to load the random sample from the
+        saved pickle and use that instead of doing another resample. This should
+        save time when plotting.
 
     bucket_client : bucketstorage.client instance
         This is a client used to download files from S3/DOS.
@@ -255,24 +265,50 @@ def make_main_plot(
         # bottom-left. If not, can remove origin kwarg below.
         ax_img.imshow(img)
 
-    # get the info from the database
-    full_catalog, start_keyid, end_keyid = (
-        get_objects(
-            dbinfo,
-            getinfo='plotcols',
-            end_keyid=None,
-            random_sample_percent=random_sample_percent
-        )
-    )
-
     if random_sample_percent is not None:
+
         random_sample = None
 
-    gi_color = np.array([x[0] for x in full_catalog])
-    gr_color = np.array([x[1] for x in full_catalog])
-    r_e = np.array([x[2] for x in full_catalog])
-    mu_e_ave_forced_g = np.array([x[3] for x in full_catalog])
+        # check for the existence of the sample pickle
+        sample_picklef = os.path.join(
+            outdir,
+            'random-sample-percent-%.1f.pkl' % random_sample_percent
+        )
 
+        if os.path.exists(sample_picklef):
+
+            LOGINFO("Using cached random sample from %s" % sample_picklef)
+
+            with open(sample_picklef,'rb') as infd:
+                gi_color, gr_color, r_e, mu_e_ave_forced_g = pickle.load(
+                    infd
+                )
+
+        else:
+
+            # get the info from the database
+            full_catalog, start_keyid, end_keyid = (
+                get_objects(
+                    dbinfo,
+                    getinfo='plotcols',
+                    end_keyid=None,
+                    random_sample_percent=random_sample_percent
+                )
+            )
+
+            gi_color = np.array([x[0] for x in full_catalog])
+            gr_color = np.array([x[1] for x in full_catalog])
+            r_e = np.array([x[2] for x in full_catalog])
+            mu_e_ave_forced_g = np.array([x[3] for x in full_catalog])
+
+            # write the random sampled arrays to the pickle file
+            with open(sample_picklef,'wb') as outfd:
+                pickle.dump((gi_color, gr_color, r_e, mu_e_ave_forced_g),
+                            outfd,
+                            pickle.HIGHEST_PROTOCOL)
+
+
+    # this is using numpy sampling
     if random_sample is not None:
 
         sample_index = npr.choice(
