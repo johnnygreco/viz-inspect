@@ -329,7 +329,15 @@ var ui = {
 
       let jump_to = parseInt($('#current-source-index').val());
 
-      if (!isNaN(jump_to)) {
+      if (!isNaN(jump_to) && (jump_to > 0) && (jump_to < review.total_objectcount)) {
+
+        // see if we should also change the objectlist to all
+        if (review.objectlist.indexOf(jump_to) == -1) {
+
+          let list_page = parseInt(jump_to/review.current_rows_per_page);
+          review.get_object_list('all',list_page,false);
+
+        }
 
         // fire the get object function
         ui.debounce(review.get_object(jump_to), 200);
@@ -345,7 +353,15 @@ var ui = {
 
         let jump_to = parseInt($('#current-source-index').val());
 
-        if (!isNaN(jump_to)) {
+        if (!isNaN(jump_to) && (jump_to > 0) && (jump_to < review.total_objectcount)) {
+
+          // see if we should also change the objectlist to all
+          if (review.objectlist.indexOf(jump_to) == -1) {
+
+            let list_page = parseInt(jump_to/review.current_rows_per_page);
+            review.get_object_list('all',list_page,false);
+
+          }
 
           // fire the get object function
           ui.debounce(review.get_object(jump_to), 200);
@@ -555,6 +571,12 @@ var review = {
         review.current_npages = result.n_pages;
         review.current_rows_per_page = result.rows_per_page;
         review.current_reviewstatus = review_status;
+
+        // special case of first load
+        if (review_status == 'all' && page == 0) {
+          review.total_npages = result.n_pages;
+          review.total_objectcount = result.object_count;
+        }
 
         // populate the object list on the page
 
@@ -784,8 +806,7 @@ ${item}
             let comment_box = `
             <div class="card mb-3 mx-1">
               <div class="card-header">
-                ${moment(comment.comment_added_on).calendar()},
-                ${comment_made_by} said
+                <strong>${comment_made_by}</strong> &mdash; ${moment(comment.comment_added_on).calendar()}
               </div>
               <div class="card-body">
                 ${ui.bib_linkify(comment.comment_text)}

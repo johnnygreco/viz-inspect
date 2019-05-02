@@ -61,39 +61,81 @@
                 id="admin-review-assign-update-form">
             {% module xsrf_form_html() %}
 
-            <div class="form-group">
-              <label for="objectid-reviewlist">Currently un-assigned objects</label>
-              <select id="objectid-reviewlist" class="custom-select" size="15" multiple>
-              </select>
-              <small class="form-text text-muted">
-                Select multiple objects by holding the <kbd>Ctrl/Cmd</kbd> key
-                when clicking.
-              </small>
-            </div>
+            <fieldset>
+              <legend>Currently unassigned objects</legend>
 
-            <div class="form-row align-items-center">
+              <div class="row justify-content-between mb-2" >
 
-              <div class="col-5" >
-                <label class="col-form-label" for="assign-objects-userid">
-                  Assign selected objects to
-                </label>
+                <div class="col-2 d-flex justify-content-start" >
+                  <button type="button"
+                          class="btn btn-outline-info btn-sm"
+                          id="prev-list-page-unassigned">
+                    &larr; prev
+                  </button>
+                </div>
+
+                <div class="col-6 d-flex justify-content-center" >
+
+                  <div class="input-group">
+                    <input type="text"
+                           id="current-list-page-unassigned" data-keyid="0"
+                           class="form-control form-control-sm"
+                           placeholder="current page"
+                           aria-label="current list page"
+                           aria-describedby="current-list-page-label">
+                    <div class="input-group-append">
+                      <button class="btn btn-outline-success btn-sm"
+                              type="button"
+                              id="jump-to-list-page-unassigned">Jump</button>
+                    </div>
+                  </div>
+
+                </div>
+
+                <div class="col-2 d-flex justify-content-end" >
+                  <button type="button"
+                          class="btn btn-outline-info btn-sm"
+                          id="next-list-page-unassigned">
+                    next &rarr;
+                  </button>
+                </div>
+
               </div>
 
-              <div class="col" >
-                <input type="text" class="form-control"
-                       id="assign-objects-userid"
-                       placeholder="User ID"
-                       minlength="5" maxlength="1024"
-                       required>
+              <div class="form-group">
+                <select id="objectid-reviewlist" class="custom-select" size="20" multiple>
+                </select>
+                <small class="form-text text-muted">
+                  Select multiple objects by holding the
+                  <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> or <kbd>Shift</kbd> key
+                  when clicking.
+                </small>
               </div>
 
-              <div class="col" >
-                <button type="submit" class="btn btn-primary" id="review-assign-objects" >
-                  Assign objects
-                </button>
-              </div>
+              <div class="form-row align-items-center">
 
-            </div>
+                <div class="col-5" >
+                  <label class="col-form-label" for="assign-objects-userid">
+                    Assign selected objects to
+                  </label>
+                </div>
+
+                <div class="col" >
+                  <input type="text" class="form-control"
+                         id="assign-objects-userid"
+                         placeholder="User ID"
+                         minlength="5" maxlength="1024"
+                         required>
+                </div>
+
+                <div class="col" >
+                  <button type="submit" class="btn btn-primary" id="review-assign-objects" >
+                    Assign objects
+                  </button>
+                </div>
+
+              </div>
+            </fieldset>
 
           </form>
 
@@ -112,7 +154,7 @@
             <div class="row mb-4" >
               <div class="col-12" >
 
-                <h5>User ID: {{ item['user_id'] }}</h5>
+                <h3>User ID: {{ item['user_id'] }}</h3>
 
                 <table class="table table-hover table-sm">
 
@@ -134,25 +176,65 @@
 
                 </table>
 
-                <div class="form-group">
-                  <label for="assigned-reviewlist-userid-{{ item['user_id'] }}">
-                    Currently assigned objects
-                  </label>
-                  <select data-userid="{{ item['user_id'] }}"
-                          id="assigned-reviewlist-userid-{{ item['user_id'] }}"
-                          class="assigned-reviewlist custom-select" size="8" multiple>
-                  </select>
-                  <small class="form-text text-muted">
-                    Select multiple objects by holding the <kbd>Ctrl/Cmd</kbd> key
-                    when clicking.
-                  </small>
-                </div>
+                <fieldset>
+                  <legend>Currently assigned objects</legend>
+                  <div class="row justify-content-between mb-2" >
 
-                <button type="submit"
-                        data-userid="{{ item['user_id'] }}"
-                        class="btn btn-outline-danger review-unassign-objects" >
-                  Remove selected objects from review assignment
-                </button>
+                    <div class="col-2 d-flex justify-content-start" >
+                      <button type="button"
+                              class="btn btn-outline-info btn-sm prev-list-page-assigned"
+                              data-userid="{{ item['user_id'] }}">
+                        &larr; prev
+                      </button>
+                    </div>
+
+                    <div class="col-6 d-flex justify-content-center" >
+
+                      <div class="input-group">
+                        <input type="text"
+                               data-userid="{{ item['user_id'] }}"
+                               class="form-control form-control-sm current-list-page-assigned"
+                               placeholder="current page"
+                               aria-label="current list page" aria-describedby="current-list-page-label">
+                        <div class="input-group-append">
+                          <button
+                            class="btn btn-outline-success btn-sm jump-to-list-page-assigned"
+                            type="button" data-userid="{{ item['user_id'] }}">
+                            Jump
+                          </button>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    <div class="col-2 d-flex justify-content-end" >
+                      <button type="button"
+                              class="btn btn-outline-info btn-sm next-list-page-assigned"
+                              data-userid="{{ item['user_id'] }}">
+                        next &rarr;
+                      </button>
+                    </div>
+
+                  </div>
+
+                  <div class="form-group">
+                    <select data-userid="{{ item['user_id'] }}"
+                            id="assigned-reviewlist-userid-{{ item['user_id'] }}"
+                            class="assigned-reviewlist custom-select" size="8" multiple>
+                    </select>
+                    <small class="form-text text-muted">
+                      Select multiple objects by holding the
+                      <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> or <kbd>Shift</kbd> key
+                      when clicking.
+                    </small>
+                  </div>
+
+                  <button type="submit"
+                          data-userid="{{ item['user_id'] }}"
+                          class="btn btn-outline-danger review-unassign-objects" >
+                    Remove selected objects from review assignment
+                  </button>
+                </fieldset>
 
               </div>
             </div>
@@ -453,8 +535,8 @@
     admin.action_setup();
 
     // load the unassigned and assigned object lists
-    assignments.review_assignment_lists(0, 'none',
-                                        0, 'none');
+    assignments.review_assignment_list('unassigned', 0);
+    assignments.review_assignment_list('assigned', 0);
 
   });
 </script>

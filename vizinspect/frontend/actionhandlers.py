@@ -364,10 +364,11 @@ def worker_export_catalog(
 
 
 def worker_list_review_assignments(
-        unassigned_start_keyid=0,
-        unassigned_end_keyid=50,
-        assigned_start_keyid=0,
-        assigned_end_keyid=50,
+        list_type='unassigned',
+        user_id=None,
+        list_page=0,
+        rows_per_page=500,
+
 ):
     '''
     This lists review assignments.
@@ -379,59 +380,120 @@ def worker_list_review_assignments(
         currproc = mp.current_process()
         conn, meta = currproc.connection, currproc.metadata
 
-        (unassigned_objects,
-         unassigned_start_keyid,
-         unassigned_end_keyid) = catalogs.get_objects(
-             (conn, meta),
-             review_status='unassigned-all',
-             userid=None,
-             start_keyid=unassigned_start_keyid,
-             end_keyid=unassigned_end_keyid,
-             getinfo='objectids',
-             fast_fetch=True
-        )
+        #
+        # parse into dicts
+        #
 
-        (assigned_objects,
-         assigned_start_keyid,
-         assigned_end_keyid) = catalogs.get_objects(
-             (conn, meta),
-             review_status='assigned-all',
-             userid=None,
-             start_keyid=assigned_start_keyid,
-             end_keyid=assigned_end_keyid,
-             getinfo='review-assignments',
-             fast_fetch=True
-        )
+        if list_type == 'unassigned':
 
-        unassigned_objects = list(set([x[0]
-                                       for x in unassigned_objects]))
+            # figure out the page slices by looking up the object count
+            list_count = catalogs.get_object_count(
+                (conn, meta),
+                review_status='unassigned-all',
+            )
+            if (list_count % rows_per_page):
+                list_n_pages = int(list_count/rows_per_page) + 1
+            else:
+                list_n_pages = int(list_count/rows_per_page)
 
-        assigned_objectdict = {}
-        for x in assigned_objects:
+            list_page_slices = [
+                [x*rows_per_page,
+                 x*rows_per_page+rows_per_page]
+                for x in range(list_n_pages)
+            ]
 
-            if x[1] and x[1] not in assigned_objectdict:
-
-                assigned_objectdict[x[1]] = {x[0]}
-
-            elif x[1]:
-                assigned_objectdict[x[1]].add(
-                    x[0]
+            # figure out start and key ids for this page slice
+            try:
+                list_start_keyid, list_end_keyid = (
+                    list_page_slices[list_page]
                 )
+            except Exception as e:
+                LOGGER.error("Invalid page specified: %s" % list_page)
+                list_start_keyid, list_end_keyid = 0, rows_per_page
 
-        for key in assigned_objectdict:
-            assigned_objectdict[key] = list(assigned_objectdict[key])
+            (list_objects,
+             list_start_keyid,
+             list_end_keyid) = catalogs.get_objects(
+                 (conn, meta),
+                 review_status='unassigned-all',
+                 userid=None,
+                 start_keyid=list_start_keyid,
+                 end_keyid=list_end_keyid,
+                 getinfo='objectids',
+                 fast_fetch=True
+            )
 
-        # this is the dict we return
-        retdict = {
-            'unassigned_objects': unassigned_objects,
-            'unassigned_start_keyid':unassigned_start_keyid,
-            'unassigned_end_keyid':unassigned_end_keyid,
-            'assigned_objects':assigned_objectdict,
-            'assigned_start_keyid':assigned_start_keyid,
-            'assigned_end_keyid':assigned_end_keyid,
-        }
+            final_objects = list(set([x[0]
+                                      for x in list_objects]))
 
-        return retdict
+            # this is the dict we return
+            retdict = {
+                'rows_per_page':rows_per_page,
+                'object_list': final_objects,
+                'start_keyid':list_start_keyid,
+                'end_keyid':list_end_keyid,
+                'object_count':list_count,
+                'n_pages':list_n_pages,
+                'curr_page':list_page,
+            }
+
+            return retdict
+
+
+        elif list_type == 'assigned' and user_id is not None:
+
+            # figure out the page slices by looking up the object count
+            list_count = catalogs.get_object_count(
+                (conn, meta),
+                review_status='assigned-self',
+                userid=user_id
+            )
+            if (list_count % rows_per_page):
+                list_n_pages = int(list_count/rows_per_page) + 1
+            else:
+                list_n_pages = int(list_count/rows_per_page)
+
+            list_page_slices = [
+                [x*rows_per_page,
+                 x*rows_per_page+rows_per_page]
+                for x in range(list_n_pages)
+            ]
+
+            # figure out start and key ids for this page slice
+            try:
+                list_start_keyid, list_end_keyid = (
+                    list_page_slices[list_page]
+                )
+            except Exception as e:
+                LOGGER.error("Invalid page specified: %s" % list_page)
+                list_start_keyid, list_end_keyid = 0, rows_per_page
+
+            (list_objects,
+             list_start_keyid,
+             list_end_keyid) = catalogs.get_objects(
+                 (conn, meta),
+                 review_status='assigned-self',
+                 userid=user_id,
+                 start_keyid=list_start_keyid,
+                 end_keyid=list_end_keyid,
+                 getinfo='review-assignments',
+                 fast_fetch=True
+            )
+
+            final_objects = list(set([x[0] for x in list_objects]))
+
+            # this is the dict we return
+            retdict = {
+                'rows_per_page':rows_per_page,
+                'object_list': final_objects,
+                'start_keyid':list_start_keyid,
+                'end_keyid':list_end_keyid,
+                'object_count':list_count,
+                'n_pages':list_n_pages,
+                'curr_page':list_page,
+            }
+
+            return retdict
 
     except Exception as e:
         LOGGER.exception("Could not get review assignments.")
@@ -940,7 +1002,7 @@ class ReviewAssignmentHandler(BaseHandler):
     @gen.coroutine
     def get(self):
         '''
-        This gets the lists of assigned and unassigned objects for review.
+        This gets the lists of assigned or unassigned objects for review.
 
         '''
 
@@ -952,53 +1014,107 @@ class ReviewAssignmentHandler(BaseHandler):
         # only allow in superuser roles
         if current_user and current_user['user_role'] == 'superuser':
 
-            unassigned_start_keyid = xhtml_escape(
-                self.get_argument('unassigned_start_keyid', '0')
-            )
-            unassigned_end_keyid = xhtml_escape(
-                self.get_argument('unassigned_end_keyid', '50')
-            )
-            assigned_start_keyid = xhtml_escape(
-                self.get_argument('assigned_start_keyid', '0')
-            )
-            assigned_end_keyid = xhtml_escape(
-                self.get_argument('assigned_end_keyid', '50')
-            )
+            try:
 
-            unassigned_start_keyid = int(unassigned_start_keyid)
-            assigned_start_keyid = int(assigned_start_keyid)
-            if unassigned_end_keyid in ('none', 'null'):
-                unassigned_end_keyid = None
-            else:
-                unassigned_end_keyid = int(unassigned_end_keyid)
-            if assigned_end_keyid in ('none', 'null'):
-                assigned_end_keyid = None
-            else:
-                assigned_end_keyid = int(assigned_end_keyid)
+                # ask the authnzerver for a user list
+                reqtype = 'user-list'
+                reqbody = {'user_id': None}
 
-            # get the review assignments
-            reviewlist_info = yield self.executor.submit(
-                worker_list_review_assignments,
-                unassigned_start_keyid=unassigned_start_keyid,
-                unassigned_end_keyid=unassigned_end_keyid,
-                assigned_start_keyid=assigned_start_keyid,
-                assigned_end_keyid=assigned_end_keyid,
-            )
+                ok, resp, msgs = yield self.authnzerver_request(
+                    reqtype, reqbody
+                )
 
-            if reviewlist_info is not None:
+                if not ok:
 
-                retdict = {'status':'ok',
-                           'message':'objectlist OK',
-                           'result':reviewlist_info}
+                    LOGGER.error('no user list returned from authnzerver')
+                    user_list = []
 
-            else:
+                else:
+                    user_list = [x['user_id'] for x in resp['user_info']]
 
-                retdict = {'status':'failed',
-                           'message':"Unable to retrieve object list.",
-                           'result':None}
+                list_type = xhtml_escape(
+                    self.get_argument('list_type','unassigned')
+                )
+                list_page = int(
+                    xhtml_escape(
+                        self.get_argument('list_page','0')
+                    )
+                )
+                get_user_id = self.get_argument('user_id', 'all')
 
-            self.write(retdict)
-            self.finish()
+                if get_user_id.strip() != 'all':
+                    get_user_id = int(xhtml_escape(get_user_id.strip()))
+                    if get_user_id not in user_list:
+                        get_user_id = None
+
+                else:
+                    get_user_id = None
+
+                # getting unassigned objects
+                if list_type == 'unassigned':
+
+                    # get the review assignments
+                    reviewlist_info = yield self.executor.submit(
+                        worker_list_review_assignments,
+                        list_type=list_type,
+                        list_page=list_page,
+                        rows_per_page=500,
+                    )
+
+                # for assigned objects, we'll do it per user
+                elif list_type == 'assigned' and get_user_id is None:
+
+                    reviewlist_info = {}
+
+                    for userid in user_list:
+
+                        reviewlist_info[userid] = yield self.executor.submit(
+                            worker_list_review_assignments,
+                            list_type=list_type,
+                            list_page=list_page,
+                            user_id=userid,
+                            rows_per_page=500,
+                        )
+
+                # for assigned objects and a single user
+                elif list_type == 'assigned' and get_user_id is not None:
+
+                    reviewlist_info = {}
+
+                    reviewlist_info[get_user_id] = yield self.executor.submit(
+                        worker_list_review_assignments,
+                        list_type=list_type,
+                        list_page=list_page,
+                        user_id=get_user_id,
+                        rows_per_page=500,
+                    )
+
+                if reviewlist_info is not None:
+
+                    retdict = {'status':'ok',
+                               'message':'objectlist OK',
+                               'result':reviewlist_info}
+
+                else:
+
+                    retdict = {'status':'failed',
+                               'message':"Unable to retrieve object list.",
+                               'result':None}
+
+                self.write(retdict)
+                self.finish()
+
+            except Exception as e:
+
+                LOGGER.exception("Failed to list assignments")
+                self.set_status(400)
+                retdict = {
+                    'status':'failed',
+                    'result':None,
+                    'message':("Sorry, could not list assignments.")
+                }
+                self.write(retdict)
+                self.finish()
 
         # anything else is not allowed, turn them away
         else:

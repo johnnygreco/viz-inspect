@@ -300,9 +300,9 @@ def main():
 
         cmd = (
             "find {imagedir} -type f -name '*.png' "
-            "-mmin +{mmin} -exec rm -v '{{}}' \;"
+            "-mtime +{mtime} -exec rm -v '{{}}' \;"
         ).format(imagedir=imagedir,
-                 mmin=retention_days*24)
+                 mtime=retention_days)
 
         try:
             LOGGER.info("Deleting images older than %s days in %s." %
