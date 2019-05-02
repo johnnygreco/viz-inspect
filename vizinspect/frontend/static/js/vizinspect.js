@@ -698,6 +698,12 @@ var review = {
         $('#current-source-index').val(objectinfo.objectid);
         $('#current-source-index').attr('data-keyid', objectinfo.keyid);
 
+        // update the hscMap URL
+        $('#hsc-map-at-loc').attr(
+          'href',
+          `http://legacysurvey.org/viewer?ra=${objectinfo.ra}&dec=${objectinfo.dec}&zoom=15&layer=decals-dr7`
+        );
+
         // update the main table
         $('#current-objectid-val').html(objectinfo.objectid);
         $('#current-ra-val').html(objectinfo.ra);
