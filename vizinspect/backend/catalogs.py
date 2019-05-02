@@ -1085,3 +1085,95 @@ def update_review_assignments(objectid_list,
         engine.dispose()
 
     return retval
+
+
+
+def chunker(seq, size):
+    '''
+    https://stackoverflow.com/a/434328
+    '''
+
+    return (seq[pos:pos + size] for pos in range(0, len(seq), size))
+
+
+
+def update_review_assignments_from_file(
+        assignment_csv,
+        dbinfo,
+        chunksize=100,
+        dbkwargs=None
+):
+    '''
+    This updates the review assignments from a file.
+
+    The file should be a CSV of the form::
+
+        objectid,userid     -> header row must have these labels
+        1,1                 -> assign objectid 1 to userid 1
+        75,4                -> assign objectid 75 to userid 4
+        100,0               -> 0 means unassign objectid 100 from all reviewers
+        ...
+
+    '''
+
+    #
+    # get the database
+    #
+    dbref, dbmeta = dbinfo
+    if not dbkwargs:
+        dbkwargs = {}
+    if isinstance(dbref, str) and 'postgres' in dbref:
+        if not dbkwargs:
+            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
+        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
+            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
+        elif dbkwargs and 'engine_kwargs' in dbkwargs:
+            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
+        engine, conn, meta = get_postgres_db(dbref,
+                                             dbmeta,
+                                             **dbkwargs)
+    elif isinstance(dbref, str) and 'postgres' not in dbref:
+        raise NotImplementedError(
+            "viz-inspect currently doesn't support non-Postgres databases."
+        )
+    else:
+        engine, conn, meta = None, dbref, dbmeta
+        meta.bind = conn
+    #
+    # end of database get
+    #
+
+    # read the file
+    assignments = pd.read_csv(assignment_csv)
+
+    grouped_assignments = assignments.groupby(['userid'])
+
+    for name, group in grouped_assignments:
+
+        this_userid = name
+
+        if this_userid == 0:
+            do_unassign = True
+        else:
+            do_unassign = False
+
+        for chunk in chunker(group['objectid'], chunksize):
+
+            assigned_items = update_review_assignments(
+                list(chunk),
+                this_userid,
+                (conn, meta),
+                do_unassign=do_unassign,
+                dbkwargs=dbkwargs
+            )
+            LOGINFO("Assigned %s objects to user ID: %s" %
+                    (assigned_items,
+                     this_userid if this_userid > 0 else None))
+
+
+    # close everything down if we were passed a database URL only and had to
+    # make a new engine
+    if engine:
+        conn.close()
+        meta.bind = None
+        engine.dispose()
