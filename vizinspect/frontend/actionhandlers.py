@@ -123,10 +123,6 @@ def worker_make_plot(
             )
             objectplot = os.path.abspath(made_plot)
 
-        # touch the plot file so we know it was recently accessed and the cache
-        # won't evict it because it's accessed often
-        pathlib.Path(objectplot).touch()
-
         return objectplot
 
     except Exception as e:
@@ -209,6 +205,10 @@ def worker_get_object(
             'comments':comments,
             'readonly':readonly
         }
+
+        # touch the plot file so we know it was recently accessed and the cache
+        # won't evict it because it's accessed often
+        pathlib.Path(objectplot).touch()
 
         return retdict
 
@@ -790,6 +790,12 @@ class LoadObjectHandler(BaseHandler):
             if objindex < 0:
                 objindex = 0
 
+            # if there's an argument saying to make plots of neighbors
+            neighborhood = self.get_argument('neighborhood', None)
+            if neighborhood:
+                neighborhood = json.loads(neighborhood)
+
+            # get the object information
             objectinfo = yield self.executor.submit(
                 worker_get_object,
                 objindex,
@@ -813,6 +819,24 @@ class LoadObjectHandler(BaseHandler):
 
             self.write(retdict)
             self.finish()
+
+            # when we're done with this object, see if we need to plot neighbors
+            if neighborhood is not None:
+
+                # we'll only make plots for up to 7 other objects
+                for neighbor in neighborhood[:6]:
+
+                    yield self.executor.submit(
+                        worker_make_plot,
+                        neighbor,
+                        self.basedir,
+                        random_sample_percent=(
+                            self.siteinfo['random_sample_percent']
+                        )
+                    )
+
+                    LOGGER.info("Background plot for %s done.")
+
 
         except Exception as e:
 
