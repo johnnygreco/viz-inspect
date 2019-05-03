@@ -733,7 +733,7 @@ var review = {
         $('#flag-button-group').empty();
 
         // update the flags button group
-        for (let item of ['candy','junk','cirrus','unknown']) {
+        for (let item of ['candy','junk','tidal','unknown']) {
 
           let color = 'info';
 
@@ -743,7 +743,7 @@ var review = {
           else if (item == 'junk') {
             color = 'danger';
           }
-          else if (item == 'cirrus') {
+          else if (item == 'tidal') {
             color = 'warning';
           }
           else if (item == 'unknown') {

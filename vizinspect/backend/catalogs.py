@@ -84,7 +84,7 @@ def load_catalog(catalog_fpath,
                  overwrite=False,
                  dbkwargs=None,
                  object_imagefile_pattern='hugs-{objectid}.png',
-                 flags_to_use=('candy','junk','tidal','cirrus'),
+                 flags_to_use=('candy','junk','tidal','unknown'),
                  **pdkwargs):
     '''This loads the catalog into the vizinspect database object_catalog table.
 
