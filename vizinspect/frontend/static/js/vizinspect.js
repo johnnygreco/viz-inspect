@@ -732,8 +732,7 @@ var review = {
         // clean out the flag button group
         $('#flag-button-group').empty();
 
-        // update the flags button group
-        for (let item in objectinfo.user_flags) {
+        for (let item of Object.keys(objectinfo.user_flags).sort()) {
 
           let color = 'info';
 

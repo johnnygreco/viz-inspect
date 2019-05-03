@@ -824,7 +824,7 @@ class LoadObjectHandler(BaseHandler):
             if neighborhood is not None:
 
                 # we'll only make plots for up to 7 other objects
-                for neighbor in neighborhood[:6]:
+                for neighbor in neighborhood[:7]:
 
                     yield self.executor.submit(
                         worker_make_plot,
