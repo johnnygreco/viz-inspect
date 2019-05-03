@@ -790,6 +790,10 @@ ${item}
           $('#object-notes').prop('disabled',true);
           $('#save-current-object').prop('disabled',true);
         }
+        else {
+          $('#object-notes').prop('disabled',false);
+          $('#save-current-object').prop('disabled',false);
+        }
 
         // clear out the comment stream for this object
         $('.all-object-comments').empty();
