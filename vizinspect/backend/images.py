@@ -346,14 +346,14 @@ def make_main_plot(
     if color_plot_xlim is not None:
         ax_top.set_xlim(color_plot_xlim)
     else:
-        ax_top.set_xlim(gi_color.min()-0.2,
-                        gi_color.max()+0.2)
+        ax_top.set_xlim(gi_color.min()-0.1,
+                        gi_color.max()+0.1)
 
     if color_plot_ylim is not None:
         ax_top.set_ylim(color_plot_ylim)
     else:
-        ax_top.set_ylim(gr_color.min()-0.2,
-                        gr_color.max()+0.2)
+        ax_top.set_ylim(gr_color.min()-0.1,
+                        gr_color.max()+0.1)
 
     # overplot the current object as a star
     ax_top.plot(
@@ -386,12 +386,12 @@ def make_main_plot(
     if reff_plot_xlim is not None:
         ax_bot.set_xlim(reff_plot_xlim)
     else:
-        ax_bot.set_xlim(0,20)
+        ax_bot.set_xlim(0, 20)
 
     if reff_plot_ylim is not None:
         ax_bot.set_ylim(reff_plot_ylim)
     else:
-        ax_bot.set_ylim(20,30)
+        ax_bot.set_ylim(22, 28.5)
 
     # overplot this object as a star
     ax_bot.plot(
