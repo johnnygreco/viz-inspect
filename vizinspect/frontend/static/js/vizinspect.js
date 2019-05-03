@@ -736,8 +736,8 @@ var review = {
 
           $('#flag-button-group').html(
             '<div class="row"><div class="col-12">' +
-              'This object is not in your review ' +
-              'assignment so it has been marked as <em>read-only</em>.'+
+              'This object is assigned to another user for review ' +
+              'so it has been marked as <em>read-only</em> for you.'+
               '</div></div>'
           );
         }
