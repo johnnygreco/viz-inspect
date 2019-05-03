@@ -170,7 +170,7 @@ define('imagedir',
        type=str)
 
 define('flagkeys',
-       default='candy,junk,tidal,unknown',
+       default='candy,junk,tidal,cirrus',
        help=("This tells the server what object flags to use for the catalog."),
        type=str)
 

@@ -732,45 +732,54 @@ var review = {
         // clean out the flag button group
         $('#flag-button-group').empty();
 
-        // update the flags button group
-        for (let item of ['candy','junk','tidal','unknown']) {
+        if (review.current_readonly) {
 
-          let color = 'info';
+          $('#flag-button-group').html(
+            '<div class="row"><div class="col-12">' +
+              'This object is assigned to another user for review ' +
+              '</div></div>'
+          );
+        }
 
-          if (item == 'candy') {
-            color = 'primary';
-          }
-          else if (item == 'junk') {
-            color = 'danger';
-          }
-          else if (item == 'tidal') {
-            color = 'warning';
-          }
-          else if (item == 'unknown') {
-            color = 'dark';
-          }
+        else {
 
-          let checked = objectinfo.user_flags[item];
-          let button_activated = '';
-          if (checked) {
-            button_activated = 'active';
-          }
-          let button_disabled = '';
-          if (review.current_readonly) {
-            button_disabled = 'disabled';
-            $('#flag-button-group').append(
-              "<p>This object is not in your review " +
-                "assignment so it has been marked as <em>read-only</em>.</p>"
-            );
-          }
+          for (let item of ['candy', 'junk', 'tidal', 'cirrus']) {
 
-          let thisrow = `
+            let color = 'info';
+
+            if (item == 'candy') {
+              color = 'primary';
+            }
+            else if (item == 'junk') {
+              color = 'danger';
+            }
+            else if (item == 'tidal') {
+              color = 'warning';
+            }
+            else if (item == 'cirrus') {
+              color = 'dark';
+            }
+
+            let checked = objectinfo.user_flags[item];
+            let button_activated = '';
+            if (checked) {
+              button_activated = 'active';
+            }
+            let button_disabled = '';
+
+            if (review.current_readonly) {
+              button_disabled = 'disabled';
+            }
+
+            let thisrow = `
 <button type="button" data-state="${button_activated}" data-value="${item}" data-toggle="button" autocomplete="off"
 id="check-${item}" class="mx-1 btn btn-lg btn-${color} object-flags-button ${button_activated}" ${button_disabled}>
 ${item}
 </button>`;
 
-          $('#flag-button-group').append(thisrow);
+            $('#flag-button-group').append(thisrow);
+
+          }
 
         }
 
@@ -872,8 +881,8 @@ ${item}
 
       // load the next objectlist and the first element there
       review.get_object_list(review.current_reviewstatus,
-                            review.current_page + 1,
-                            'first');
+                             review.current_page + 1,
+                             'first');
 
     }
 
@@ -900,8 +909,8 @@ ${item}
 
       // load the prev objectlist and the last element there
       review.get_object_list(review.current_reviewstatus,
-                            review.current_page - 1,
-                            'last');
+                             review.current_page - 1,
+                             'last');
 
     }
 
