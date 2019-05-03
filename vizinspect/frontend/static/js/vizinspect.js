@@ -733,7 +733,7 @@ var review = {
         $('#flag-button-group').empty();
 
         // update the flags button group
-        for (let item in objectinfo.user_flags) {
+        for (let item of ['candy','junk','cirrus','unknown']) {
 
           let color = 'info';
 
@@ -766,7 +766,7 @@ var review = {
 
           let thisrow = `
 <button type="button" data-state="${button_activated}" data-value="${item}" data-toggle="button" autocomplete="off"
-id="check-${item}" class="mx-1 btn btn-${color} object-flags-button ${button_activated}" ${button_disabled}>
+id="check-${item}" class="mx-1 btn btn-lg btn-${color} object-flags-button ${button_activated}" ${button_disabled}>
 ${item}
 </button>`;
 

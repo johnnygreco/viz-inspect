@@ -133,6 +133,25 @@
         {% module xsrf_form_html() %}
         <div class="row" >
 
+          <div class="col-sm-12 col-md-5" >
+
+              <!-- <h4>Object flags</h4> -->
+
+            <div id="flag-button-group" class="mt-2 d-flex">
+            </div>
+
+            <br>
+
+            <div class="custom-control custom-checkbox mb-4">
+              <input type="checkbox" class="custom-control-input" id="pref-autosave-next">
+              <label class="custom-control-label" for="pref-autosave-next">
+                Save &amp; jump to next object when flag is set
+              </label>
+            </div>
+
+
+          </div>
+
           <div class="col-sm-12 col-md-7" >
 
             <div class="form-group">
@@ -146,23 +165,6 @@
                     id="save-current-object">
               Save notes and classification
             </button>
-
-          </div>
-
-          <div class="col-sm-12 col-md-5" >
-
-            <h4>Object flags</h4>
-
-            <div class="custom-control custom-checkbox mb-4">
-              <input type="checkbox" class="custom-control-input" id="pref-autosave-next">
-              <label class="custom-control-label" for="pref-autosave-next">
-                Save &amp; jump to next object when flag is set
-              </label>
-            </div>
-
-            <div id="flag-button-group" class="mt-2 d-flex">
-
-            </div>
 
           </div>
 
