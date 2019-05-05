@@ -1,7 +1,7 @@
 recursive-include vizinspect/frontend/templates *.html
 recursive-include vizinspect/frontend/static *.js
 recursive-include vizinspect/frontend/static *.css
-recursive-include vizinspect/frontend/static/images *
+recursive-include vizinspect/frontend/static *.svg
 
 include LICENSE
 include README.md
