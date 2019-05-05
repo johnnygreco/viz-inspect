@@ -89,6 +89,14 @@ Comments = Table(
     Column('contents', Text),
 )
 
+Reviewers = Table(
+    'object_reviewers',
+    VIZINSPECT,
+    Column('objectid', Integer, ForeignKey('object_catalog.objectid'),
+           nullable=False, index=True),
+    Column('userid',Integer, index=True, nullable=False),
+)
+
 
 #######################################
 ## JSON SERIALIZERS AND DESERIALIZERS ##

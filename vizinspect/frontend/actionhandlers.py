@@ -91,7 +91,8 @@ from ..backend import catalogs, images
 def worker_make_plot(
         objectid,
         basedir,
-        random_sample_percent=2.0
+        random_sample_percent=2.0,
+        override_dbinfo=None,
 ):
     '''
     This makes the main plot for a specific objectid.
@@ -100,8 +101,11 @@ def worker_make_plot(
 
     try:
 
-        currproc = mp.current_process()
-        conn, meta = currproc.connection, currproc.metadata
+        if not override_dbinfo:
+            currproc = mp.current_process()
+            conn, meta = currproc.connection, currproc.metadata
+        else:
+            conn, meta = override_dbinfo
 
         # get the plot if it exists
         objectplot = os.path.abspath(
@@ -135,6 +139,7 @@ def worker_get_object(
         basedir,
         userid,
         random_sample_percent=2.0,
+        override_dbinfo=None,
 ):
     '''
     This does the actual work of loading the object.
@@ -152,8 +157,11 @@ def worker_get_object(
 
     try:
 
-        currproc = mp.current_process()
-        conn, meta = currproc.connection, currproc.metadata
+        if not override_dbinfo:
+            currproc = mp.current_process()
+            conn, meta = currproc.connection, currproc.metadata
+        else:
+            conn, meta = override_dbinfo
 
         # this returns a list of objectinfo rows
         # one row per entry in the comments table for this object
@@ -168,16 +176,25 @@ def worker_get_object(
                      'comment_userset_flags':x['comment_userset_flags'],
                      'comment_text':x['comment_text']} for x in objectinfo]
 
+        # make a list of the reviewers' user IDs
+        reviewer_userid = list(
+            set([x['reviewer_userid'] for x in objectinfo
+                 if x['reviewer_userid'] is not None])
+        )
+
         comments = sorted(comments,
                           key=lambda x: x['comment_added_on'],
                           reverse=True)
 
+        # we return a single dict with all of the object info collapsed into it
         objectinfo_dict = objectinfo[0]
         del objectinfo_dict['comment_added_on']
         del objectinfo_dict['comment_by_userid']
         del objectinfo_dict['comment_by_username']
         del objectinfo_dict['comment_userset_flags']
         del objectinfo_dict['comment_text']
+        objectinfo_dict['reviewer_userid'] = reviewer_userid
+
         objectinfo_dict['filepath'] = 'redacted'
 
         objectplot = worker_make_plot(
@@ -187,13 +204,13 @@ def worker_get_object(
         )
 
         # set the readonly flag
-        if (objectinfo_dict['reviewer_userid'] is not None and
-            userid == objectinfo_dict['reviewer_userid']):
+        if (len(objectinfo_dict['reviewer_userid']) > 0 and
+            userid in objectinfo_dict['reviewer_userid']):
             readonly = False
-        elif (objectinfo_dict['reviewer_userid'] is not None and
-              userid != objectinfo_dict['reviewer_userid']):
+        elif (len(objectinfo_dict['reviewer_userid']) > 0 and
+              userid not in objectinfo_dict['reviewer_userid']):
             readonly = True
-        elif (objectinfo_dict['reviewer_userid'] is None):
+        elif (len(objectinfo_dict['reviewer_userid']) == 0):
             readonly = False
         else:
             readonly = True
@@ -222,7 +239,8 @@ def worker_get_objects(
         userid=None,
         page=0,
         rows_per_page=100,
-        getinfo='objectids'
+        getinfo='objectids',
+        override_dbinfo=None,
 ):
     '''
     This returns the full object list.
@@ -231,8 +249,11 @@ def worker_get_objects(
 
     try:
 
-        currproc = mp.current_process()
-        conn, meta = currproc.connection, currproc.metadata
+        if not override_dbinfo:
+            currproc = mp.current_process()
+            conn, meta = currproc.connection, currproc.metadata
+        else:
+            conn, meta = override_dbinfo
 
         # figure out the page slices by looking up the object count
         list_count = catalogs.get_object_count(
@@ -299,6 +320,7 @@ def worker_insert_object_comments(
         userid,
         username,
         comments,
+        override_dbinfo=None,
 ):
     '''
     This inserts object comments.
@@ -307,8 +329,11 @@ def worker_insert_object_comments(
 
     try:
 
-        currproc = mp.current_process()
-        conn, meta = currproc.connection, currproc.metadata
+        if not override_dbinfo:
+            currproc = mp.current_process()
+            conn, meta = currproc.connection, currproc.metadata
+        else:
+            conn, meta = override_dbinfo
 
         # this returns a list of dicts {'objectid': <objectid>}
         updated = catalogs.insert_object_comments(
@@ -343,13 +368,13 @@ def worker_insert_object_comments(
         objectplot = 'plot-objectid-{objectid}.png'.format(objectid=objectid)
 
         # set the readonly flag
-        if (objectinfo_dict['reviewer_userid'] is not None and
-            userid == objectinfo_dict['reviewer_userid']):
+        if (len(objectinfo_dict['reviewer_userid']) > 0 and
+            userid in objectinfo_dict['reviewer_userid']):
             readonly = False
-        elif (objectinfo_dict['reviewer_userid'] is not None and
-              userid != objectinfo_dict['reviewer_userid']):
+        elif (len(objectinfo_dict['reviewer_userid']) > 0 and
+              userid not in objectinfo_dict['reviewer_userid']):
             readonly = True
-        elif (objectinfo_dict['reviewer_userid'] is None):
+        elif (len(objectinfo_dict['reviewer_userid']) == 0):
             readonly = False
         else:
             readonly = True
@@ -373,6 +398,7 @@ def worker_insert_object_comments(
 def worker_update_object_flags(
         objectid,
         flags,
+        override_dbinfo=None,
 ):
     '''
     This updates object flags.
@@ -384,6 +410,7 @@ def worker_update_object_flags(
 def worker_export_catalog(
         basedir,
         outdir='viz-inspect-data',
+        override_dbinfo=None,
 ):
     '''This exports the catalog from the DB to the output dir.
 
@@ -399,6 +426,7 @@ def worker_list_review_assignments(
         user_id=None,
         list_page=0,
         rows_per_page=500,
+        override_dbinfo=None,
 
 ):
     '''
@@ -408,8 +436,11 @@ def worker_list_review_assignments(
 
     try:
 
-        currproc = mp.current_process()
-        conn, meta = currproc.connection, currproc.metadata
+        if not override_dbinfo:
+            currproc = mp.current_process()
+            conn, meta = currproc.connection, currproc.metadata
+        else:
+            conn, meta = override_dbinfo
 
         #
         # parse into dicts
@@ -520,6 +551,7 @@ def worker_list_review_assignments(
                  fast_fetch=True
             )
 
+            # we're only interested in the assigned object lists
             final_objects = list(set([x[0] for x in list_objects]))
 
             # this is the dict we return
@@ -545,6 +577,7 @@ def worker_assign_reviewer(
         userid,
         assignment_list,
         do_unassign=False,
+        override_dbinfo=None,
 ):
     '''
     This assigns objects to a reviewer.
@@ -553,8 +586,11 @@ def worker_assign_reviewer(
 
     try:
 
-        currproc = mp.current_process()
-        conn, meta = currproc.connection, currproc.metadata
+        if not override_dbinfo:
+            currproc = mp.current_process()
+            conn, meta = currproc.connection, currproc.metadata
+        else:
+            conn, meta = override_dbinfo
 
         updated_assignments = catalogs.update_review_assignments(
             assignment_list,

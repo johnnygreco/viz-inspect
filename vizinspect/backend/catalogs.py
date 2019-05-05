@@ -343,8 +343,9 @@ def get_object_count(
     # prepare the select
     object_catalog = meta.tables['object_catalog']
     object_comments = meta.tables['object_comments']
+    object_reviewers = meta.tables['object_reviewers']
 
-    join = object_catalog.outerjoin(object_comments)
+    join = object_catalog.outerjoin(object_comments).outerjoin(object_reviewers)
 
     sel = select(
         [func.count(distinct(object_catalog.c.id))]
@@ -370,27 +371,27 @@ def get_object_count(
         )
     elif review_status == 'assigned-self' and userid is not None:
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid == userid
+            object_reviewers.c.userid == userid
         )
     elif review_status == 'assigned-reviewed' and userid is not None:
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid == userid
+            object_reviewers.c.userid == userid
         ).where(
             object_comments.c.added != None
         )
     elif review_status == 'assigned-unreviewed' and userid is not None:
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid == userid
+            object_reviewers.c.userid == userid
         ).where(
             object_comments.c.added == None
         )
     elif review_status == 'assigned-all':
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid != None
+            object_reviewers.c.userid != None
         )
     elif review_status == 'unassigned-all':
         actual_sel = sel.where(
-            object_catalog.c.reviewer_userid == None
+            object_reviewers.c.userid == None
         )
     else:
         actual_sel = sel
@@ -473,8 +474,13 @@ def get_object(objectid,
     object_catalog = meta.tables['object_catalog']
     object_images = meta.tables['object_images']
     object_comments = meta.tables['object_comments']
+    object_reviewers = meta.tables['object_reviewers']
 
-    join = object_catalog.join(object_images).outerjoin(object_comments)
+    join = object_catalog.join(
+        object_images
+    ).outerjoin(
+        object_comments
+    ).outerjoin(object_reviewers)
 
     sel = select(
         [object_catalog.c.id.label('keyid'),
@@ -482,7 +488,7 @@ def get_object(objectid,
          object_catalog.c.ra,
          object_catalog.c.dec,
          object_catalog.c.user_flags,
-         object_catalog.c.reviewer_userid,
+         object_reviewers.c.userid.label("reviewer_userid"),
          object_catalog.c.extra_columns,
          object_images.c.filepath,
          object_comments.c.added.label("comment_added_on"),
@@ -617,6 +623,7 @@ def get_objects(
     object_catalog = meta.tables['object_catalog']
     object_images = meta.tables['object_images']
     object_comments = meta.tables['object_comments']
+    object_reviewers = meta.tables['object_reviewers']
 
     # add in the random sample if specified
     if random_sample_percent is not None:
@@ -626,7 +633,13 @@ def get_objects(
     else:
         object_catalog_sample = object_catalog
 
-    join = object_catalog_sample.join(object_images).outerjoin(object_comments)
+    join = object_catalog_sample.join(
+        object_images
+    ).outerjoin(
+        object_comments
+    ).outerjoin(
+        object_reviewers
+    )
 
     if getinfo == 'all':
 
@@ -636,7 +649,7 @@ def get_objects(
              object_catalog_sample.c.ra,
              object_catalog_sample.c.dec,
              object_catalog_sample.c.user_flags,
-             object_catalog_sample.c.reviewer_userid,
+             object_reviewers.c.userid.label("reviewer_userid"),
              object_catalog_sample.c.extra_columns,
              object_images.c.filepath,
              object_comments.c.added.label("comment_added_on"),
@@ -659,11 +672,15 @@ def get_objects(
         fast_fetch = True
 
     elif getinfo == 'objectids':
-        sel = select([object_catalog_sample.c.objectid]).select_from(join)
+        sel = select([
+            object_catalog_sample.c.objectid
+        ]).select_from(join)
 
     elif getinfo == 'review-assignments':
-        sel = select([object_catalog_sample.c.objectid,
-                      object_catalog_sample.c.reviewer_userid]).select_from(join)
+        sel = select(
+            [object_catalog_sample.c.objectid,
+             func.array_agg(object_reviewers.c.userid).label("reviewer_userid")]
+        ).select_from(join).group_by(object_catalog_sample.c.objectid)
 
     else:
         sel = select([object_catalog_sample.c.objectid]).select_from(join)
@@ -688,27 +705,27 @@ def get_objects(
         )
     elif review_status == 'assigned-self' and userid is not None:
         actual_sel = sel.where(
-            object_catalog_sample.c.reviewer_userid == userid
+            object_reviewers.c.userid == userid
         )
     elif review_status == 'assigned-reviewed' and userid is not None:
         actual_sel = sel.where(
-            object_catalog_sample.c.reviewer_userid == userid
+            object_reviewers.c.userid == userid
         ).where(
             object_comments.c.added != None
         )
     elif review_status == 'assigned-unreviewed' and userid is not None:
         actual_sel = sel.where(
-            object_catalog_sample.c.reviewer_userid == userid
+            object_reviewers.c.userid == userid
         ).where(
             object_comments.c.added == None
         )
     elif review_status == 'assigned-all':
         actual_sel = sel.where(
-            object_catalog_sample.c.reviewer_userid != None
+            object_reviewers.c.userid != None
         )
     elif review_status == 'unassigned-all':
         actual_sel = sel.where(
-            object_catalog_sample.c.reviewer_userid == None
+            object_reviewers.c.userid == None
         )
     else:
         actual_sel = sel
@@ -1054,26 +1071,28 @@ def update_review_assignments(objectid_list,
     #
 
     # prepare the tables
-    object_catalog = meta.tables['object_catalog']
+    object_reviewers = meta.tables['object_reviewers']
+
 
     if not do_unassign:
 
-        upd = update(object_catalog).where(
-            object_catalog.c.objectid.in_(list(objectid_list))
+        statement = pg.insert(
+            object_reviewers
         ).values(
-            {'reviewer_userid':reviewer_userid}
+            [{'objectid':x,
+              'userid':reviewer_userid} for x in objectid_list]
         )
 
     else:
 
-        upd = update(object_catalog).where(
-            object_catalog.c.objectid.in_(list(objectid_list))
+        statement = update(object_reviewers).where(
+            object_reviewers.c.objectid.in_(list(objectid_list))
         ).values(
-            {'reviewer_userid':None}
+            {'userid': None}
         )
 
     with conn.begin():
-        res = conn.execute(upd)
+        res = conn.execute(statement)
         retval = res.rowcount
         res.close()
 
