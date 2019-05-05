@@ -6,7 +6,7 @@ Stolen from http://python-packaging.readthedocs.io/en/latest/everything.html and
 modified by me.
 
 '''
-__version__ = '0.0.1'
+__version__ = '0.1.0'
 
 from setuptools import setup, find_packages
 
@@ -31,7 +31,7 @@ setup(
     long_description=readme(),
     long_description_content_type="text/markdown",
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'License :: OSI Approved :: MIT License',
         "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering :: Astronomy",
