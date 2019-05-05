@@ -296,10 +296,10 @@ def make_main_plot(
                 )
             )
 
-            gi_color = np.array([x[0] for x in full_catalog])
-            gr_color = np.array([x[1] for x in full_catalog])
-            r_e = np.array([x[2] for x in full_catalog])
-            mu_e_ave_forced_g = np.array([x[3] for x in full_catalog])
+            gi_color = np.array([x[1] for x in full_catalog])
+            gr_color = np.array([x[2] for x in full_catalog])
+            r_e = np.array([x[3] for x in full_catalog])
+            mu_e_ave_forced_g = np.array([x[4] for x in full_catalog])
 
             # write the random sampled arrays to the pickle file
             with open(sample_picklef,'wb') as outfd:

@@ -524,8 +524,8 @@ def get_objects(
         dbinfo,
         review_status='all',
         userid=None,
-        start_keyid=0,
-        end_keyid=50,
+        start_keyid=1,
+        max_objects=50,
         getinfo='objectids',
         dbkwargs=None,
         fast_fetch=False,
@@ -664,7 +664,8 @@ def get_objects(
     elif getinfo == 'plotcols':
 
         sel = select(
-            [object_catalog_sample.c.extra_columns['g-i'],
+            [object_catalog_sample.c.id,
+             object_catalog_sample.c.extra_columns['g-i'],
              object_catalog_sample.c.extra_columns['g-r'],
              object_catalog_sample.c.extra_columns['flux_radius_ave_g'],
              object_catalog_sample.c.extra_columns['mu_ave_g']]
@@ -673,17 +674,26 @@ def get_objects(
 
     elif getinfo == 'objectids':
         sel = select([
+            object_catalog_sample.c.id,
             object_catalog_sample.c.objectid
         ]).select_from(join)
 
     elif getinfo == 'review-assignments':
         sel = select(
-            [object_catalog_sample.c.objectid,
+            [object_catalog_sample.c.id,
+             object_catalog_sample.c.objectid,
              func.array_agg(object_reviewers.c.userid).label("reviewer_userid")]
-        ).select_from(join).group_by(object_catalog_sample.c.objectid)
+        ).select_from(join).group_by(
+            object_catalog_sample.c.id
+        ).group_by(
+            object_catalog_sample.c.objectid
+        )
 
     else:
-        sel = select([object_catalog_sample.c.objectid]).select_from(join)
+        sel = select([
+            object_catalog_sample.c.id,
+            object_catalog_sample.c.objectid
+        ]).select_from(join)
 
     # figure out the where condition
     if review_status == 'unreviewed-all':
@@ -731,19 +741,14 @@ def get_objects(
         actual_sel = sel
 
     # add in the pagination
-    if start_keyid is not None and end_keyid is not None:
+    if start_keyid is not None and max_objects is not None:
         paged_sel = actual_sel.where(
             object_catalog_sample.c.id >= start_keyid
-        ).where(
-            object_catalog_sample.c.id <= end_keyid
-        )
-    elif start_keyid is not None and end_keyid is None:
+        ).order_by(object_catalog_sample.c.id).limit(max_objects)
+
+    elif start_keyid is not None and max_objects is None:
         paged_sel = actual_sel.where(
             object_catalog_sample.c.id >= start_keyid
-        )
-    elif end_keyid is not None and start_keyid is None:
-        paged_sel = actual_sel.where(
-            object_catalog_sample.c.id <= end_keyid
         )
     else:
         paged_sel = actual_sel
@@ -754,10 +759,23 @@ def get_objects(
         res = conn.execute(paged_sel)
         if fast_fetch:
             rows = res.fetchall()
+            if len(rows) > 0:
+                ret_start_keyid = rows[0][0]
+                ret_end_keyid = rows[-1][0]
+            else:
+                ret_start_keyid = 1
+                ret_end_keyid = 1
         else:
             rows = [
                 {column: value for column, value in row.items()} for row in res
             ]
+            if len(rows) > 0:
+                ret_start_keyid = rows[0]['keyid']
+                ret_end_keyid = rows[-1]['keyid']
+            else:
+                ret_end_keyid = 1
+                ret_end_keyid = 1
+
 
     # close everything down if we were passed a database URL only and had to
     # make a new engine
@@ -766,7 +784,7 @@ def get_objects(
         meta.bind = None
         engine.dispose()
 
-    return rows, start_keyid, end_keyid
+    return rows, ret_start_keyid, ret_end_keyid
 
 
 

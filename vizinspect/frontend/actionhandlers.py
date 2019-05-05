@@ -93,6 +93,8 @@ def worker_make_plot(
         basedir,
         random_sample_percent=2.0,
         override_dbinfo=None,
+        override_client=None,
+        raiseonfail=False,
 ):
     '''
     This makes the main plot for a specific objectid.
@@ -101,8 +103,14 @@ def worker_make_plot(
 
     try:
 
+        currproc = mp.current_process()
+
+        if not override_client:
+            bucket_client = currproc.bucket_client
+        else:
+            bucket_client = override_client
+
         if not override_dbinfo:
-            currproc = mp.current_process()
             conn, meta = currproc.connection, currproc.metadata
         else:
             conn, meta = override_dbinfo
@@ -122,7 +130,7 @@ def worker_make_plot(
                 objectid,
                 (conn, meta),
                 os.path.join(basedir, 'viz-inspect-data'),
-                bucket_client=currproc.bucket_client,
+                bucket_client=bucket_client,
                 random_sample_percent=random_sample_percent,
             )
             objectplot = os.path.abspath(made_plot)
@@ -131,6 +139,9 @@ def worker_make_plot(
 
     except Exception as e:
         LOGGER.exception("Could not get info for object: %s" % objectid)
+        if raiseonfail:
+            raise
+
         return None
 
 
@@ -140,6 +151,8 @@ def worker_get_object(
         userid,
         random_sample_percent=2.0,
         override_dbinfo=None,
+        override_client=None,
+        raiseonfail=False,
 ):
     '''
     This does the actual work of loading the object.
@@ -170,11 +183,14 @@ def worker_get_object(
         objectinfo = catalogs.get_object(objectid,
                                          (conn, meta))
 
-        comments = [{'comment_added_on':x['comment_added_on'],
-                     'comment_by_userid':x['comment_by_userid'],
-                     'comment_by_username':x['comment_by_username'],
-                     'comment_userset_flags':x['comment_userset_flags'],
-                     'comment_text':x['comment_text']} for x in objectinfo]
+        comments = [
+            {'comment_added_on':x['comment_added_on'],
+             'comment_by_userid':x['comment_by_userid'],
+             'comment_by_username':x['comment_by_username'],
+             'comment_userset_flags':x['comment_userset_flags'],
+             'comment_text':x['comment_text']} for x in objectinfo
+            if x['comment_added_on'] is not None
+        ]
 
         # make a list of the reviewers' user IDs
         reviewer_userid = list(
@@ -182,9 +198,13 @@ def worker_get_object(
                  if x['reviewer_userid'] is not None])
         )
 
-        comments = sorted(comments,
-                          key=lambda x: x['comment_added_on'],
-                          reverse=True)
+        comments = sorted(
+            comments,
+            key=lambda x: (
+                x['comment_added_on'] if x['comment_added_on'] else ''
+            ),
+            reverse=True
+        )
 
         # we return a single dict with all of the object info collapsed into it
         objectinfo_dict = objectinfo[0]
@@ -200,7 +220,10 @@ def worker_get_object(
         objectplot = worker_make_plot(
             objectid,
             basedir,
-            random_sample_percent=random_sample_percent
+            random_sample_percent=random_sample_percent,
+            override_dbinfo=override_dbinfo,
+            override_client=override_client,
+            raiseonfail=raiseonfail
         )
 
         # set the readonly flag
@@ -231,16 +254,20 @@ def worker_get_object(
 
     except Exception as e:
         LOGGER.exception("Could not get info for object: %s" % objectid)
+        if raiseonfail:
+            raise
+
         return None
 
 
 def worker_get_objects(
         review_status='all',
         userid=None,
-        page=0,
-        rows_per_page=100,
+        start_keyid=1,
+        max_objects=100,
         getinfo='objectids',
         override_dbinfo=None,
+        raiseonfail=False,
 ):
     '''
     This returns the full object list.
@@ -261,41 +288,24 @@ def worker_get_objects(
             review_status=review_status,
             userid=userid,
         )
-        if (list_count % rows_per_page):
-            n_pages = int(list_count/rows_per_page) + 1
+        if (list_count % max_objects):
+            n_pages = int(list_count/max_objects) + 1
         else:
-            n_pages = int(list_count/rows_per_page)
+            n_pages = int(list_count/max_objects)
 
-        page_slices = [
-            [x*rows_per_page,
-             x*rows_per_page+rows_per_page]
-            for x in range(n_pages)
-        ]
-
-        # figure out start and key ids for this page slice
-        try:
-            start_keyid, end_keyid = page_slices[page]
-        except Exception as e:
-            LOGGER.exception(
-                "Invalid page specified: %s, list_count: %s, "
-                "rows_per_page: %s, list_n_pages: %s" %
-                (page, list_count, rows_per_page, n_pages)
-            )
-            start_keyid, end_keyid = 0, 100
-
-        # this returns a list of dicts {'objectid': <objectid>}
+        # this returns a list of tuples (keyid, objectid)
         objectlist, ret_start_keyid, ret_end_keyid = catalogs.get_objects(
             (conn, meta),
             review_status=review_status,
             userid=userid,
             start_keyid=start_keyid,
-            end_keyid=end_keyid,
+            max_objects=max_objects,
             getinfo=getinfo,
             fast_fetch=True
         )
 
         # reform to a single list
-        returned_objectlist = [x[0] for x in objectlist]
+        returned_objectlist = [x[1] for x in objectlist]
 
         # this is the dict we return
         retdict = {
@@ -303,15 +313,17 @@ def worker_get_objects(
             'start_keyid':ret_start_keyid,
             'end_keyid':ret_end_keyid,
             'object_count':list_count,
-            'rows_per_page':rows_per_page,
+            'rows_per_page':max_objects,
             'n_pages':n_pages,
-            'curr_page':page,
         }
 
         return retdict
 
     except Exception as e:
         LOGGER.exception("Could not get object list.")
+        if raiseonfail:
+            raise
+
         return None
 
 
@@ -321,6 +333,7 @@ def worker_insert_object_comments(
         username,
         comments,
         override_dbinfo=None,
+        raiseonfail=False,
 ):
     '''
     This inserts object comments.
@@ -391,6 +404,8 @@ def worker_insert_object_comments(
 
     except Exception as e:
         LOGGER.exception("Could not insert the comments into the DB.")
+        if raiseonfail:
+            raise
         return None
 
 
@@ -399,6 +414,7 @@ def worker_update_object_flags(
         objectid,
         flags,
         override_dbinfo=None,
+        raiseonfail=False,
 ):
     '''
     This updates object flags.
@@ -411,6 +427,7 @@ def worker_export_catalog(
         basedir,
         outdir='viz-inspect-data',
         override_dbinfo=None,
+        raiseonfail=False,
 ):
     '''This exports the catalog from the DB to the output dir.
 
@@ -424,10 +441,10 @@ def worker_export_catalog(
 def worker_list_review_assignments(
         list_type='unassigned',
         user_id=None,
-        list_page=0,
-        rows_per_page=500,
+        start_keyid=1,
+        max_objects=500,
         override_dbinfo=None,
-
+        raiseonfail=False,
 ):
     '''
     This lists review assignments.
@@ -453,29 +470,10 @@ def worker_list_review_assignments(
                 (conn, meta),
                 review_status='unassigned-all',
             )
-            if (list_count % rows_per_page):
-                list_n_pages = int(list_count/rows_per_page) + 1
+            if (list_count % max_objects):
+                list_n_pages = int(list_count/max_objects) + 1
             else:
-                list_n_pages = int(list_count/rows_per_page)
-
-            list_page_slices = [
-                [x*rows_per_page,
-                 x*rows_per_page+rows_per_page]
-                for x in range(list_n_pages)
-            ]
-
-            # figure out start and key ids for this page slice
-            try:
-                list_start_keyid, list_end_keyid = (
-                    list_page_slices[list_page]
-                )
-            except Exception as e:
-                LOGGER.exception(
-                    "Invalid page specified: %s, list_count: %s, "
-                    "rows_per_page: %s, list_n_pages: %s" %
-                    (list_page, list_count, rows_per_page, list_n_pages)
-                )
-                list_start_keyid, list_end_keyid = 0, rows_per_page
+                list_n_pages = int(list_count/max_objects)
 
             (list_objects,
              list_start_keyid,
@@ -483,24 +481,22 @@ def worker_list_review_assignments(
                  (conn, meta),
                  review_status='unassigned-all',
                  userid=None,
-                 start_keyid=list_start_keyid,
-                 end_keyid=list_end_keyid,
+                 start_keyid=start_keyid,
+                 max_objects=max_objects,
                  getinfo='objectids',
                  fast_fetch=True
             )
 
-            final_objects = list(set([x[0]
-                                      for x in list_objects]))
+            final_objects = list(set([x[1] for x in list_objects]))
 
             # this is the dict we return
             retdict = {
-                'rows_per_page':rows_per_page,
+                'rows_per_page':max_objects,
                 'object_list': final_objects,
                 'start_keyid':list_start_keyid,
                 'end_keyid':list_end_keyid,
                 'object_count':list_count,
                 'n_pages':list_n_pages,
-                'curr_page':list_page,
             }
 
             return retdict
@@ -514,30 +510,10 @@ def worker_list_review_assignments(
                 review_status='assigned-self',
                 userid=user_id
             )
-            if (list_count % rows_per_page):
-                list_n_pages = int(list_count/rows_per_page) + 1
+            if (list_count % max_objects):
+                list_n_pages = int(list_count/max_objects) + 1
             else:
-                list_n_pages = int(list_count/rows_per_page)
-
-            list_page_slices = [
-                [x*rows_per_page,
-                 x*rows_per_page+rows_per_page]
-                for x in range(list_n_pages)
-            ]
-
-            # figure out start and key ids for this page slice
-            try:
-                list_start_keyid, list_end_keyid = (
-                    list_page_slices[list_page]
-                )
-            except Exception as e:
-                LOGGER.exception(
-                    "Invalid page specified: %s, list_count: %s, "
-                    "rows_per_page: %s, list_n_pages: %s, user_id: %s" %
-                    (list_page, list_count, rows_per_page,
-                     list_n_pages, user_id)
-                )
-                list_start_keyid, list_end_keyid = 0, rows_per_page
+                list_n_pages = int(list_count/max_objects)
 
             (list_objects,
              list_start_keyid,
@@ -545,30 +521,32 @@ def worker_list_review_assignments(
                  (conn, meta),
                  review_status='assigned-self',
                  userid=user_id,
-                 start_keyid=list_start_keyid,
-                 end_keyid=list_end_keyid,
+                 start_keyid=start_keyid,
+                 max_objects=max_objects,
                  getinfo='review-assignments',
                  fast_fetch=True
             )
 
             # we're only interested in the assigned object lists
-            final_objects = list(set([x[0] for x in list_objects]))
+            final_objects = sorted(list(set([x[1] for x in list_objects])))
 
             # this is the dict we return
             retdict = {
-                'rows_per_page':rows_per_page,
+                'rows_per_page':max_objects,
                 'object_list': final_objects,
                 'start_keyid':list_start_keyid,
                 'end_keyid':list_end_keyid,
                 'object_count':list_count,
                 'n_pages':list_n_pages,
-                'curr_page':list_page,
             }
 
             return retdict
 
     except Exception as e:
         LOGGER.exception("Could not get review assignments.")
+        if raiseonfail:
+            raise
+
         return None
 
 
@@ -578,6 +556,7 @@ def worker_assign_reviewer(
         assignment_list,
         do_unassign=False,
         override_dbinfo=None,
+        raiseonfail=False,
 ):
     '''
     This assigns objects to a reviewer.
@@ -604,6 +583,9 @@ def worker_assign_reviewer(
     except Exception as e:
 
         LOGGER.exception("Could not assign objects for review.")
+        if raiseonfail:
+            raise
+
         return False
 
 
@@ -716,13 +698,20 @@ class ObjectListHandler(BaseHandler):
                 raise ValueError("Unknown review status requested: '%s'" %
                                  review_status)
 
-            page = int(xhtml_escape(self.get_argument('page', '0')))
+            start_keyid = int(
+                xhtml_escape(self.get_argument('start_keyid', '1'))
+            )
+            max_objects = int(
+                xhtml_escape(self.get_argument('max_objects',
+                                               self.siteinfo['rows_per_page']))
+            )
 
             objectlist_info = yield self.executor.submit(
                 worker_get_objects,
                 review_status=review_status,
                 userid=self.current_user['user_id'],
-                page=page,
+                start_keyid=start_keyid,
+                max_objects=max_objects,
                 getinfo='objectids',
             )
 
@@ -1138,9 +1127,9 @@ class ReviewAssignmentHandler(BaseHandler):
                 list_type = xhtml_escape(
                     self.get_argument('list_type','unassigned')
                 )
-                list_page = int(
+                start_keyid = int(
                     xhtml_escape(
-                        self.get_argument('list_page','0')
+                        self.get_argument('start_keyid','1')
                     )
                 )
                 get_user_id = self.get_argument('user_id', 'all')
@@ -1159,9 +1148,9 @@ class ReviewAssignmentHandler(BaseHandler):
                     # get the review assignments
                     reviewlist_info = yield self.executor.submit(
                         worker_list_review_assignments,
-                        list_type=list_type,
-                        list_page=list_page,
-                        rows_per_page=500,
+                        list_type='unassigned',
+                        start_keyid=start_keyid,
+                        max_objects=500,
                     )
 
                 # for assigned objects, we'll do it per user
@@ -1173,10 +1162,10 @@ class ReviewAssignmentHandler(BaseHandler):
 
                         reviewlist_info[userid] = yield self.executor.submit(
                             worker_list_review_assignments,
-                            list_type=list_type,
-                            list_page=list_page,
+                            list_type='assigned',
+                            start_keyid=start_keyid,
+                            max_objects=500,
                             user_id=userid,
-                            rows_per_page=500,
                         )
 
                 # for assigned objects and a single user
@@ -1187,9 +1176,9 @@ class ReviewAssignmentHandler(BaseHandler):
                     reviewlist_info[get_user_id] = yield self.executor.submit(
                         worker_list_review_assignments,
                         list_type=list_type,
-                        list_page=list_page,
+                        start_keyid=start_keyid,
+                        max_objects=500,
                         user_id=get_user_id,
-                        rows_per_page=500,
                     )
 
                 if reviewlist_info is not None:
