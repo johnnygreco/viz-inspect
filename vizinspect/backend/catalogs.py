@@ -880,8 +880,8 @@ def insert_object_comments(userid,
     object_comments = meta.tables['object_comments']
 
     with conn.begin():
-        added = updated = datetime.now(tz=utc)
 
+        added = updated = datetime.now(tz=utc)
         objectid = comments['objectid']
         comment_text = comments['comment']
         user_flags = comments['user_flags']
@@ -907,11 +907,9 @@ def insert_object_comments(userid,
              'user_flags':user_flags,
              'contents':rendered_comment}
         )
-        conn.execute(insert)
-
-    # now look up the object and get all of its info
-    with conn.begin():
-        objectinfo = get_object(objectid, (conn, meta), dbkwargs)
+        res = conn.execute(insert)
+        updated = res.rowcount
+        res.close()
 
     # close everything down if we were passed a database URL only and had to
     # make a new engine
@@ -920,7 +918,7 @@ def insert_object_comments(userid,
         meta.bind = None
         engine.dispose()
 
-    return objectinfo
+    return updated
 
 
 

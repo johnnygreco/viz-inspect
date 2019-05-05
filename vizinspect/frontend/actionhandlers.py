@@ -356,48 +356,9 @@ def worker_insert_object_comments(
             username=username,
         )
 
-        # reform to a single list
-        objectid = updated[0]['objectid']
-        objectinfo_dict = updated[0]
-
-        all_comments = [{'comment_added_on':x['comment_added_on'],
-                         'comment_by_userid':x['comment_by_userid'],
-                         'comment_by_username':x['comment_by_username'],
-                         'comment_userset_flags':x['comment_userset_flags'],
-                         'comment_text':x['comment_text']} for x in updated]
-
-        all_comments = sorted(all_comments,
-                              key=lambda x: x['comment_added_on'],
-                              reverse=True)
-
-        del objectinfo_dict['comment_added_on']
-        del objectinfo_dict['comment_by_userid']
-        del objectinfo_dict['comment_by_username']
-        del objectinfo_dict['comment_userset_flags']
-        del objectinfo_dict['comment_text']
-        objectinfo_dict['filepath'] = 'redacted'
-
-        # get the plot if it exists
-        objectplot = 'plot-objectid-{objectid}.png'.format(objectid=objectid)
-
-        # set the readonly flag
-        if (len(objectinfo_dict['reviewer_userid']) > 0 and
-            userid in objectinfo_dict['reviewer_userid']):
-            readonly = False
-        elif (len(objectinfo_dict['reviewer_userid']) > 0 and
-              userid not in objectinfo_dict['reviewer_userid']):
-            readonly = True
-        elif (len(objectinfo_dict['reviewer_userid']) == 0):
-            readonly = False
-        else:
-            readonly = True
-
         # this is the dict we return
         retdict = {
-            'info': objectinfo_dict,
-            'plot':os.path.basename(objectplot),
-            'comments':all_comments,
-            'readonly':readonly
+            'updated': updated == 1,
         }
 
         return retdict
@@ -417,7 +378,7 @@ def worker_update_object_flags(
         raiseonfail=False,
 ):
     '''
-    This updates object flags.
+    This updates the global object flags.
 
     '''
 
