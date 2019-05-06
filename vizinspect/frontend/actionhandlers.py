@@ -490,7 +490,7 @@ def worker_list_review_assignments(
                  start_keyid=start_keyid,
                  end_keyid=end_keyid,
                  max_objects=max_objects,
-                 getinfo='review-assignments',
+                 getinfo='objectids',
                  fast_fetch=True
             )
 
@@ -1141,7 +1141,7 @@ class ReviewAssignmentHandler(BaseHandler):
                         worker_list_review_assignments,
                         list_type='unassigned',
                         start_keyid=start_keyid,
-                        max_objects=500,
+                        max_objects=self.siteinfo['rows_per_page'],
                     )
 
                 # for assigned objects, we'll do it per user
@@ -1155,7 +1155,7 @@ class ReviewAssignmentHandler(BaseHandler):
                             worker_list_review_assignments,
                             list_type='assigned',
                             start_keyid=start_keyid,
-                            max_objects=500,
+                            max_objects=self.siteinfo['rows_per_page'],
                             user_id=userid,
                         )
 
@@ -1168,7 +1168,7 @@ class ReviewAssignmentHandler(BaseHandler):
                         worker_list_review_assignments,
                         list_type=list_type,
                         start_keyid=start_keyid,
-                        max_objects=500,
+                        max_objects=self.siteinfo['rows_per_page'],
                         user_id=get_user_id,
                     )
 

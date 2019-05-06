@@ -76,19 +76,12 @@
 
                 <div class="col-6 d-flex justify-content-center" >
 
-                  <div class="input-group">
-                    <input type="text"
-                           id="current-list-page-unassigned" data-keyid="0"
-                           class="form-control form-control-sm"
-                           placeholder="current page"
-                           aria-label="current list page"
-                           aria-describedby="current-list-page-label">
-                    <div class="input-group-append">
-                      <button class="btn btn-outline-success btn-sm"
-                              type="button"
-                              id="jump-to-list-page-unassigned">Jump</button>
-                    </div>
-                  </div>
+                  Page&nbsp;
+                  <span id="current-list-page-unassigned"></span>
+                  &nbsp;
+                  of
+                  &nbsp;
+                  <span id="current-list-npages-unassigned"></span>
 
                 </div>
 
@@ -190,20 +183,12 @@
 
                     <div class="col-6 d-flex justify-content-center" >
 
-                      <div class="input-group">
-                        <input type="text"
-                               data-userid="{{ item['user_id'] }}"
-                               class="form-control form-control-sm current-list-page-assigned"
-                               placeholder="current page"
-                               aria-label="current list page" aria-describedby="current-list-page-label">
-                        <div class="input-group-append">
-                          <button
-                            class="btn btn-outline-success btn-sm jump-to-list-page-assigned"
-                            type="button" data-userid="{{ item['user_id'] }}">
-                            Jump
-                          </button>
-                        </div>
-                      </div>
+                      Page&nbsp;
+                      <span class="current-list-page-assigned" data-userid="{{ item['user_id'] }}"></span>
+                      &nbsp;
+                      of
+                      &nbsp;
+                      <span class="current-list-npages-assigned" data-userid="{{ item['user_id'] }}"></span>
 
                     </div>
 
@@ -535,8 +520,8 @@
     admin.action_setup();
 
     // load the unassigned and assigned object lists
-    assignments.review_assignment_list('unassigned', 0);
-    assignments.review_assignment_list('assigned', 0);
+    assignments.review_assignment_list('unassigned', 'start',1, undefined, 0);
+    assignments.review_assignment_list('assigned', 'start', 1, 'all', 0);
 
   });
 </script>

@@ -62,15 +62,16 @@ var assignments = {
           assignments.unassigned_rows_per_page = result.rows_per_page;
 
           if (set_page_to !== undefined) {
-            assignments.assigned_page = set_page_to;
+            assignments.unassigned_page = set_page_to;
           }
 
           // update the controls for unassigned objects
           let $unassigned_select = $('#objectid-reviewlist');
           $unassigned_select.empty();
 
-          // update the current page number
+          // update the current page number and npages
           $('#current-list-page-unassigned').val(assignments.unassigned_page);
+          $('#current-list-npages-unassigned').val(assignments.unassigned_npages);
 
           for (let objectid of assignments.unassigned_objects) {
 
@@ -96,11 +97,15 @@ var assignments = {
             assignments.assigned_npages[userid] = result[userid].n_pages;
             assignments.assigned_objectcount[userid] = result[userid].object_count;
             assignments.assigned_rows_per_page[userid] = result[userid].rows_per_page;
-
-            let $page_control = $('.current-list-page-assigned').filter(
+            // update the current page and npages for this userid
+            let $this_userid_currpage = $('.current-list-page-assigned').filter(
               `[data-userid='${userid}']`
             );
-            $page_control.val(assignments.assigned_page[userid]);
+            let $this_userid_npages = $('.current-list-npages-assigned').filter(
+              `[data-userid='${userid}']`
+            );
+            $this_userid_currpage.html(assignments.assigned_page[userid]);
+            $this_userid_npages.html(assignments.assigned_npages[userid]);
 
             let this_user_assigned = assignments.assigned_objects[userid];
 
@@ -131,10 +136,15 @@ var assignments = {
           assignments.assigned_objectcount[user_id] = result[user_id].object_count;
           assignments.assigned_rows_per_page[user_id] = result[user_id].rows_per_page;
 
-          let $page_control = $('.current-list-page-assigned').filter(
-            `[data-user_id='${user_id}']`
+          // update the current page and npages for this userid
+          let $this_userid_currpage = $('.current-list-page-assigned').filter(
+            `[data-userid='${user_id}']`
           );
-          $page_control.val(assignments.assigned_page[user_id]);
+          let $this_userid_npages = $('.current-list-npages-assigned').filter(
+            `[data-userid='${user_id}']`
+          );
+          $this_userid_currpage.html(assignments.assigned_page[user_id]);
+          $this_userid_npages.html(assignments.assigned_npages[user_id]);
 
           let this_user_assigned = assignments.assigned_objects[user_id];
 
