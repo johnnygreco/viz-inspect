@@ -336,3 +336,11 @@ footer img {
   height: 1rem;
   border-width: .2em;
 }
+
+#plot-box {
+  height: 500px;
+}
+
+#galaxy-main-plot {
+  height: 500px;
+}
