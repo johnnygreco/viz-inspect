@@ -1644,15 +1644,22 @@ def delete_user(payload,
         }
 
 
-    delete = users.delete().where(
+    users_delete = users.delete().where(
         users.c.user_id == payload['user_id']
     ).where(
         users.c.email == payload['email']
     ).where(
         users.c.user_role != 'superuser'
     )
-    result = currproc.connection.execute(delete)
-    result.close()
+    sessions_delete = sessions.delete().where(
+        sessions.c.user_id == payload['user_id']
+    ).where(
+        users.c.user_role != 'superuser'
+    )
+    sessions_result = currproc.connection.execute(sessions_delete)
+    users_result = currproc.connection.execute(users_delete)
+    users_result.close()
+    sessions_result.close()
 
     sel = select([
         users.c.user_id,

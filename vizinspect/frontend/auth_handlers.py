@@ -1209,8 +1209,7 @@ class DeleteUserHandler(BaseHandler):
                             'danger',
                         )
 
-                        self.clear_cookie('server_session')
-                        self.clear_cookie('server_prefs')
+                        self.clear_all_cookies()
                         self.redirect('/')
 
                     else:
