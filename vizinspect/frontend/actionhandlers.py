@@ -1116,13 +1116,14 @@ class ReviewAssignmentHandler(BaseHandler):
                     ]
 
                 list_type = xhtml_escape(
-                    self.get_argument('list_type','unassigned')
+                    self.get_argument('list','unassigned')
                 )
-                start_keyid = int(
-                    xhtml_escape(
-                        self.get_argument('start_keyid','1')
-                    )
+
+                keytype = xhtml_escape(self.get_argument('keytype', 'start'))
+                keyid = int(
+                    xhtml_escape(self.get_argument('keyid', '1'))
                 )
+                max_objects = self.siteinfo['rows_per_page']
                 get_user_id = self.get_argument('user_id', 'all')
 
                 if get_user_id.strip() != 'all':
@@ -1136,13 +1137,36 @@ class ReviewAssignmentHandler(BaseHandler):
                 # getting unassigned objects
                 if list_type == 'unassigned':
 
-                    # get the review assignments
-                    reviewlist_info = yield self.executor.submit(
-                        worker_list_review_assignments,
-                        list_type='unassigned',
-                        start_keyid=start_keyid,
-                        max_objects=self.siteinfo['rows_per_page'],
-                    )
+                    if keytype.strip() == 'start':
+
+                        # get the review assignments
+                        reviewlist_info = yield self.executor.submit(
+                            worker_list_review_assignments,
+                            list_type='unassigned',
+                            start_keyid=keyid,
+                            end_keyid=None,
+                            max_objects=max_objects,
+                        )
+
+                    elif keytype.strip() == 'end':
+
+                        reviewlist_info = yield self.executor.submit(
+                            worker_list_review_assignments,
+                            list_type='unassigned',
+                            start_keyid=None,
+                            end_keyid=keyid,
+                            max_objects=max_objects,
+                        )
+
+                    else:
+
+                        reviewlist_info = yield self.executor.submit(
+                            worker_list_review_assignments,
+                            list_type='unassigned',
+                            start_keyid=None,
+                            end_keyid=keyid,
+                            max_objects=max_objects,
+                        )
 
                 # for assigned objects, we'll do it per user
                 elif list_type == 'assigned' and get_user_id is None:
@@ -1151,26 +1175,90 @@ class ReviewAssignmentHandler(BaseHandler):
 
                     for userid in user_list:
 
-                        reviewlist_info[userid] = yield self.executor.submit(
-                            worker_list_review_assignments,
-                            list_type='assigned',
-                            start_keyid=start_keyid,
-                            max_objects=self.siteinfo['rows_per_page'],
-                            user_id=userid,
-                        )
+                        if keytype.strip() == 'start':
+
+                            # get the review assignments
+                            reviewlist_info[userid] = (
+                                yield self.executor.submit(
+                                    worker_list_review_assignments,
+                                    list_type='assigned',
+                                    start_keyid=keyid,
+                                    end_keyid=None,
+                                    max_objects=max_objects,
+                                    user_id=userid,
+                                )
+                            )
+
+                        elif keytype.strip() == 'end':
+
+                            reviewlist_info[userid] = (
+                                yield self.executor.submit(
+                                    worker_list_review_assignments,
+                                    list_type='assigned',
+                                    start_keyid=None,
+                                    end_keyid=keyid,
+                                    max_objects=max_objects,
+                                    user_id=userid,
+                                )
+                            )
+
+                        else:
+
+                            reviewlist_info[userid] = (
+                                yield self.executor.submit(
+                                    worker_list_review_assignments,
+                                    list_type='assigned',
+                                    start_keyid=None,
+                                    end_keyid=keyid,
+                                    max_objects=max_objects,
+                                    user_id=userid,
+                                )
+                            )
 
                 # for assigned objects and a single user
                 elif list_type == 'assigned' and get_user_id is not None:
 
                     reviewlist_info = {}
 
-                    reviewlist_info[get_user_id] = yield self.executor.submit(
-                        worker_list_review_assignments,
-                        list_type=list_type,
-                        start_keyid=start_keyid,
-                        max_objects=self.siteinfo['rows_per_page'],
-                        user_id=get_user_id,
-                    )
+                    if keytype.strip() == 'start':
+
+                        # get the review assignments
+                        reviewlist_info[get_user_id] = (
+                            yield self.executor.submit(
+                                worker_list_review_assignments,
+                                list_type='assigned',
+                                start_keyid=keyid,
+                                end_keyid=None,
+                                max_objects=max_objects,
+                                user_id=get_user_id,
+                            )
+                        )
+
+                    elif keytype.strip() == 'end':
+
+                        reviewlist_info[get_user_id] = (
+                            yield self.executor.submit(
+                                worker_list_review_assignments,
+                                list_type='assigned',
+                                start_keyid=None,
+                                end_keyid=keyid,
+                                max_objects=max_objects,
+                                user_id=get_user_id,
+                            )
+                        )
+
+                    else:
+
+                        reviewlist_info[get_user_id] = (
+                            yield self.executor.submit(
+                                worker_list_review_assignments,
+                                list_type='assigned',
+                                start_keyid=None,
+                                end_keyid=keyid,
+                                max_objects=max_objects,
+                                user_id=get_user_id,
+                            )
+                        )
 
                 if reviewlist_info is not None:
 

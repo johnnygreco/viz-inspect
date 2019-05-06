@@ -62,7 +62,7 @@
             {% module xsrf_form_html() %}
 
             <fieldset>
-              <legend>Currently unassigned objects</legend>
+              <legend>Currently unassigned objects <span id="spinner-block"></span></legend>
 
               <div class="row justify-content-between mb-2" >
 
@@ -74,7 +74,7 @@
                   </button>
                 </div>
 
-                <div class="col-6 d-flex justify-content-center" >
+                <div class="col-6 d-flex justify-content-center align-items-center" >
 
                   Page&nbsp;
                   <span id="current-list-page-unassigned"></span>
@@ -181,7 +181,7 @@
                       </button>
                     </div>
 
-                    <div class="col-6 d-flex justify-content-center" >
+                    <div class="col-6 d-flex justify-content-center align-items-center" >
 
                       Page&nbsp;
                       <span class="current-list-page-assigned" data-userid="{{ item['user_id'] }}"></span>
@@ -240,7 +240,8 @@
     <div class="tab-pane" id="email-settings"
          role="tabpanel" aria-labelledby="email-settings-tab">
 
-      <form class="mt-2" action="/admin/email" method="post" id="admin-email-update-form">
+      <form class="mt-2" action="/admin/email"
+            method="post" id="admin-email-update-form">
         {% module xsrf_form_html() %}
 
         <div class="row" >
@@ -306,22 +307,26 @@
               {% if siteinfo['logins_allowed'] is True %}
 
               <div class="form-check form-check-inline">
-                <input type="radio" id="loginradio-yes" value="login-allowed" name="loginradio" class="form-check-input" checked>
+                <input type="radio" id="loginradio-yes" value="login-allowed"
+                       name="loginradio" class="form-check-input" checked>
                 <label class="form-check-label" for="loginradio-yes">Yes</label>
               </div>
               <div class="form-check form-check-inline">
-                <input type="radio" id="loginradio-no" value="login-disallowed" name="loginradio" class="form-check-input">
+                <input type="radio" id="loginradio-no" value="login-disallowed"
+                       name="loginradio" class="form-check-input">
                 <label class="form-check-label" for="loginradio-no">No</label>
               </div>
 
               {% else %}
 
               <div class="form-check form-check-inline">
-                <input type="radio" id="loginradio-yes" value="login-allowed" name="loginradio" class="form-check-input">
+                <input type="radio" id="loginradio-yes" value="login-allowed"
+                       name="loginradio" class="form-check-input">
                 <label class="form-check-label" for="loginradio-yes">Yes</label>
               </div>
               <div class="form-check form-check-inline">
-                <input type="radio" id="loginradio-no" value="login-disallowed" name="loginradio" class="form-check-input" checked>
+                <input type="radio" id="loginradio-no" value="login-disallowed"
+                       name="loginradio" class="form-check-input" checked>
                 <label class="form-check-label" for="loginradio-no">No</label>
               </div>
 
@@ -335,22 +340,26 @@
               {% if siteinfo['signups_allowed'] is True %}
 
               <div class="form-check form-check-inline">
-                <input type="radio" id="signupradio-yes" value="signup-allowed" name="signupradio" class="form-check-input" checked>
+                <input type="radio" id="signupradio-yes" value="signup-allowed"
+                       name="signupradio" class="form-check-input" checked>
                 <label class="form-check-label" for="signupradio-yes">Yes</label>
               </div>
               <div class="form-check form-check-inline">
-                <input type="radio" id="signupradio-no" value="signup-disallowed" name="signupradio" class="form-check-input">
+                <input type="radio" id="signupradio-no" value="signup-disallowed"
+                       name="signupradio" class="form-check-input">
                 <label class="form-check-label" for="signupradio-no">No</label>
               </div>
 
               {% else %}
 
               <div class="form-check form-check-inline">
-                <input type="radio" id="signupradio-yes" value="signup-allowed" name="signupradio" class="form-check-input">
+                <input type="radio" id="signupradio-yes" value="signup-allowed"
+                       name="signupradio" class="form-check-input">
                 <label class="form-check-label" for="signupradio-yes">Yes</label>
               </div>
               <div class="form-check form-check-inline">
-                <input type="radio" id="signupradio-no" value="signup-disallowed" name="signupradio" class="form-check-input" checked>
+                <input type="radio" id="signupradio-no" value="signup-disallowed"
+                       name="signupradio" class="form-check-input" checked>
                 <label class="form-check-label" for="signupradio-no">No</label>
               </div>
 

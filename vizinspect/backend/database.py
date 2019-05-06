@@ -94,7 +94,7 @@ Reviewers = Table(
     VIZINSPECT,
     Column('objectid', Integer, ForeignKey('object_catalog.objectid'),
            nullable=False, index=True),
-    Column('userid',Integer, index=True, nullable=False),
+    Column('userid',Integer, index=True, nullable=True),
 )
 
 

@@ -34,13 +34,22 @@ var assignments = {
                                     user_id,
                                     set_page_to) {
 
+    // set up a spinner
+    if (list_type == 'unassigned') {
+      $('#spinner-block').html(
+        '<div class="spinner-border" role="status">' +
+          '<span class="sr-only">Loading...</span>' +
+          '</div>'
+      );
+    }
+
     let get_user_id = 'all';
     if (user_id !== undefined) {
       get_user_id = user_id;
     }
 
     let url =
-        `/api/review-assign?list_type=${list_type}&list_keytype=${list_keytype}&list_keyid=${list_keyid}&user_id=${get_user_id}`;
+        `/api/review-assign?list=${list_type}&keytype=${list_keytype}&keyid=${list_keyid}&user_id=${get_user_id}`;
 
     $.getJSON(url, function (data) {
 
@@ -53,6 +62,10 @@ var assignments = {
         // updating the unassigned objects
         if (list_type == 'unassigned') {
 
+          if (set_page_to !== undefined) {
+            assignments.unassigned_page = set_page_to;
+          }
+
           assignments.unassigned_objects = result.object_list;
           assignments.unassigned_start_keyid = result.start_keyid;
           assignments.unassigned_end_keyid = result.end_keyid;
@@ -61,17 +74,13 @@ var assignments = {
           assignments.unassigned_objectcount = result.object_count;
           assignments.unassigned_rows_per_page = result.rows_per_page;
 
-          if (set_page_to !== undefined) {
-            assignments.unassigned_page = set_page_to;
-          }
-
           // update the controls for unassigned objects
           let $unassigned_select = $('#objectid-reviewlist');
           $unassigned_select.empty();
 
           // update the current page number and npages
-          $('#current-list-page-unassigned').val(assignments.unassigned_page);
-          $('#current-list-npages-unassigned').val(assignments.unassigned_npages);
+          $('#current-list-page-unassigned').html(assignments.unassigned_page + 1);
+          $('#current-list-npages-unassigned').html(assignments.unassigned_npages);
 
           for (let objectid of assignments.unassigned_objects) {
 
@@ -84,16 +93,17 @@ var assignments = {
         }
 
         // updating all user IDs
-        else if (list_type == 'assigned' && user_id === undefined) {
+        else if (list_type == 'assigned' && (user_id === undefined || user_id === 'all')) {
 
           for (let userid in result) {
+
+            if (set_page_to !== undefined) {
+              assignments.assigned_page[userid] = set_page_to;
+            }
 
             assignments.assigned_objects[userid] = result[userid].object_list;
             assignments.assigned_start_keyid[userid] = result[userid].start_keyid;
             assignments.assigned_end_keyid[userid] = result[userid].end_keyid;
-            if (set_page_to !== undefined) {
-              assignments.assigned_page[userid] = set_page_to;
-            }
             assignments.assigned_npages[userid] = result[userid].n_pages;
             assignments.assigned_objectcount[userid] = result[userid].object_count;
             assignments.assigned_rows_per_page[userid] = result[userid].rows_per_page;
@@ -104,7 +114,7 @@ var assignments = {
             let $this_userid_npages = $('.current-list-npages-assigned').filter(
               `[data-userid='${userid}']`
             );
-            $this_userid_currpage.html(assignments.assigned_page[userid]);
+            $this_userid_currpage.html(assignments.assigned_page[userid] + 1);
             $this_userid_npages.html(assignments.assigned_npages[userid]);
 
             let this_user_assigned = assignments.assigned_objects[userid];
@@ -124,14 +134,15 @@ var assignments = {
         }
 
         // updating a single user_id
-        else if (list_type == 'assigned' && user_id !== undefined) {
+        else if (list_type == 'assigned' && user_id !== undefined && user_id !== 'all') {
+
+          if (set_page_to !== undefined) {
+            assignments.assigned_page[user_id] = set_page_to;
+          }
 
           assignments.assigned_objects[user_id] = result[user_id].object_list;
           assignments.assigned_start_keyid[user_id] = result[user_id].start_keyid;
           assignments.assigned_end_keyid[user_id] = result[user_id].end_keyid;
-            if (set_page_to !== undefined) {
-              assignments.assigned_page[user_id] = set_page_to;
-            }
           assignments.assigned_npages[user_id] = result[user_id].n_pages;
           assignments.assigned_objectcount[user_id] = result[user_id].object_count;
           assignments.assigned_rows_per_page[user_id] = result[user_id].rows_per_page;
@@ -143,7 +154,7 @@ var assignments = {
           let $this_userid_npages = $('.current-list-npages-assigned').filter(
             `[data-userid='${user_id}']`
           );
-          $this_userid_currpage.html(assignments.assigned_page[user_id]);
+          $this_userid_currpage.html(assignments.assigned_page[user_id] + 1);
           $this_userid_npages.html(assignments.assigned_npages[user_id]);
 
           let this_user_assigned = assignments.assigned_objects[user_id];
@@ -165,6 +176,12 @@ var assignments = {
 
       else {
         ui.alert_box(message, 'danger');
+      }
+
+    }).always(function () {
+
+      if (list_type == 'unassigned') {
+        $('#spinner-block').empty();
       }
 
     }).fail(function (xhr) {
@@ -387,6 +404,47 @@ var admin = {
             assignments.unassigned_start_keyid,
             undefined,
             assignments.unassigned_page - 1
+          ),
+          100
+        );
+      }
+
+    });
+
+    // handle the next unassigned page link
+    $('.next-list-page-assigned').on('click', function (evt) {
+
+      let user_id = parseInt($(this).attr('data-userid'));
+
+      if (assignments.assigned_page[user_id] < assignments.assigned_npages[user_id]) {
+        ui.debounce(
+          assignments.review_assignment_list(
+            'assigned',
+            'start',
+            assignments.assigned_end_keyid[user_id],
+            user_id,
+            assignments.assigned_page[user_id] + 1
+          ),
+          100
+        );
+      }
+
+    });
+
+
+    // handle the prev unassigned page link
+    $('.prev-list-page-assigned').on('click', function (evt) {
+
+      let user_id = parseInt($(this).attr('data-userid'));
+
+      if (assignments.assigned_page[user_id] > 0) {
+        ui.debounce(
+          assignments.review_assignment_list(
+            'assigned',
+            'end',
+            assignments.assigned_start_keyid[user_id],
+            user_id,
+            assignments.assigned_page[user_id] - 1
           ),
           100
         );

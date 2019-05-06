@@ -915,13 +915,14 @@ ${item}
         ui.alert_box(message, "danger");
       }
 
-    }).done(function () {
+    }).always(function () {
 
       $('#spinner-block').empty();
 
     }).fail(function(xhr) {
-      ui.alert_box("Could not load this object from the backend.", "danger");
-      $('#spinner-block').empty();
+      ui.alert_box("Could not load requested object, " +
+                   "possibly because no objects exist in the current list.",
+                   "danger");
     });
 
   },
