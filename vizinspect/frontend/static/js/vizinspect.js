@@ -334,8 +334,13 @@ var ui = {
         // see if we should also change the objectlist to all
         if (review.objectlist.indexOf(jump_to) == -1) {
 
-          let list_page = parseInt(jump_to/review.current_rows_per_page);
-          review.get_object_list('all',list_page,false);
+          review.get_object_list(
+              'all',
+              'start',
+              1,
+              false,
+              0
+          );
 
         }
 
@@ -359,7 +364,13 @@ var ui = {
           if (review.objectlist.indexOf(jump_to) == -1) {
 
             let list_page = parseInt(jump_to/review.current_rows_per_page);
-            review.get_object_list('all',list_page,false);
+            review.get_object_list(
+              'all',
+              'start',
+              1,
+              false,
+              0
+            );
 
           }
 
@@ -389,31 +400,104 @@ var ui = {
       let selected = $(this).val();
 
       if (selected === 'reviewed-all') {
-        ui.debounce(review.get_object_list('reviewed-all', 0, 'first'), 100);
+        ui.debounce(
+          review.get_object_list(
+            'reviewed-all',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
       }
       else if (selected === 'unreviewed-all') {
-        ui.debounce(review.get_object_list('unreviewed-all', 0, 'first'), 100);
+        ui.debounce(
+          review.get_object_list(
+            'unreviewed-all',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
       }
       else if (selected === 'reviewed-self') {
-        ui.debounce(review.get_object_list('reviewed-self', 0, 'first'), 100);
+        ui.debounce(
+          review.get_object_list(
+            'reviewed-self',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
       }
       else if (selected === 'reviewed-other') {
-        ui.debounce(review.get_object_list('reviewed-other', 0, 'first'),100);
+        ui.debounce(
+          review.get_object_list(
+            'reviewed-other',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
       }
       else if (selected === 'assigned-self') {
-        ui.debounce(review.get_object_list('assigned-self', 0, 'first'), 100);
+        ui.debounce(
+          review.get_object_list(
+            'assigned-self',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
       }
       else if (selected === 'assigned-reviewed') {
-        ui.debounce(review.get_object_list('assigned-reviewed', 0, 'first'), 100);
+        ui.debounce(
+          review.get_object_list(
+            'assigned-reviewed',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
       }
       else if (selected === 'assigned-unreviewed') {
-        ui.debounce(review.get_object_list('assigned-unreviewed', 0, 'first'), 100);
+        ui.debounce(
+          review.get_object_list(
+            'assigned-unreviewed',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
       }
       else {
-        ui.debounce(review.get_object_list('all', 0, 'first'), 100);
+        ui.debounce(
+          review.get_object_list(
+            'all',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
       }
 
     });
+
 
     $('#next-list-page').on('click', function (evt) {
 
@@ -421,14 +505,17 @@ var ui = {
         ui.debounce(
           review.get_object_list(
             review.current_reviewstatus,
-            review.current_page + 1,
-            'first'
+            'start',
+            review.objectlist_end_keyid,
+            'first',
+            review.current_page + 1
           ),
           100
         );
       }
 
     });
+
 
     $('#prev-list-page').on('click', function (evt) {
 
@@ -436,50 +523,13 @@ var ui = {
         ui.debounce(
           review.get_object_list(
             review.current_reviewstatus,
-            review.current_page - 1,
-            'last'
+            'end',
+            review.objectlist_start_keyid,
+            'last',
+            review.current_page - 1
           ),
           100
         );
-      }
-
-    });
-
-    $('#jump-to-list-page').on('click', function (evt) {
-
-      let page_to_jump_to = $('#current-list-page').val();
-
-      if (page_to_jump_to >= 0 && page_to_jump_to < review.current_npages) {
-        ui.debounce(
-          review.get_object_list(
-            review.current_reviewstatus,
-            page_to_jump_to,
-            'first'
-          ),
-          100
-        );
-      }
-
-    });
-
-    // handle enter key in the jump box
-    $('#current-list-page').on('keyup', function (evt) {
-
-      if (evt.keyCode == 13) {
-
-        let page_to_jump_to = $(this).val();
-
-        if (page_to_jump_to >= 0 && page_to_jump_to < review.current_npages) {
-          ui.debounce(
-            review.get_object_list(
-              review.current_reviewstatus,
-              page_to_jump_to,
-              'first'
-            ),
-            100
-          );
-        }
-
       }
 
     });
@@ -537,10 +587,10 @@ var review = {
 
 
   objectlist: null,
-  objectlist_start_keyid: null,
-  objectlist_end_keyid: null,
+  objectlist_start_keyid: 1,
+  objectlist_end_keyid: 100,
 
-  current_page: null,
+  current_page: 0,
   current_objectcount: null,
   current_npages: null,
   current_rows_per_page: null,
@@ -549,10 +599,12 @@ var review = {
   // this fetches the full object list. if load_object is true, will load
   // the appropriate object in the list right after fetching the list
   get_object_list: function (review_status,
-                             page,
-                             load_object) {
+                             keytype,
+                             keyid,
+                             load_object,
+                             set_page_to) {
 
-    let url = `/api/list-objects?review_status=${review_status}&page=${page}`;
+    let url = `/api/list-objects?review_status=${review_status}&keytype=${keytype}&keyid=${keyid}`;
 
     $.getJSON(url, function (data) {
 
@@ -566,14 +618,13 @@ var review = {
         review.objectlist = result.objectlist;
         review.objectlist_start_keyid = result.start_keyid;
         review.objectlist_end_keyid = result.end_keyid;
-        review.current_page = result.curr_page;
         review.current_objectcount = result.object_count;
         review.current_npages = result.n_pages;
         review.current_rows_per_page = result.rows_per_page;
         review.current_reviewstatus = review_status;
 
         // special case of first load
-        if (review_status == 'all' && page == 0) {
+        if (review_status == 'all' && keytype == 'start' && keyid == 1) {
           review.total_npages = result.n_pages;
           review.total_objectcount = result.object_count;
         }
@@ -600,8 +651,6 @@ var review = {
         ui.alert_box(message, "danger");
 
       }
-
-
 
     }).done(function (xhr) {
 
@@ -644,6 +693,14 @@ var review = {
       }
       $('#current-index-label').html(index_label);
 
+
+    }).done(function () {
+
+      if (set_page_to !== undefined) {
+        review.current_page = parseInt(set_page_to);
+      }
+
+      $('#current-pagenum').html(review.current_page + 1);
 
     }).fail( function (xhr) {
 
@@ -709,13 +766,18 @@ var review = {
         $('#current-ra-val').html(objectinfo.ra);
         $('#current-dec-val').html(objectinfo.dec);
         $('#current-reff-val').html(
-          objectinfo.extra_columns['flux_radius_ave_g'].toPrecision(2)
+          objectinfo.extra_columns['flux_radius_ave_g']
+            .toPrecision(2)
         );
         $('#current-mug0-val').html(
           objectinfo.extra_columns['mu_ave_g'].toPrecision(4)
         );
-        $('#current-gicolor-val').html(objectinfo.extra_columns['g-i'].toPrecision(2));
-        $('#current-grcolor-val').html(objectinfo.extra_columns['g-r'].toPrecision(2));
+        $('#current-gicolor-val').html(
+          objectinfo.extra_columns['g-i'].toPrecision(2)
+        );
+        $('#current-grcolor-val').html(
+          objectinfo.extra_columns['g-r'].toPrecision(2)
+        );
 
         // clean out the extra info table
         $('#extra-info-cols').empty();
@@ -736,7 +798,7 @@ var review = {
 
           $('#flag-button-group').html(
             '<div class="row"><div class="col-12">' +
-              'This object is assigned to another user for review ' +
+              'This object is assigned to another user for review.' +
               '</div></div>'
           );
         }
@@ -884,9 +946,13 @@ ${item}
               (review.current_page < review.current_npages) ) {
 
       // load the next objectlist and the first element there
-      review.get_object_list(review.current_reviewstatus,
-                             review.current_page + 1,
-                             'first');
+      review.get_object_list(
+        review.current_reviewstatus,
+        'start',
+        review.objectlist_end_keyid,
+        'first',
+        review.current_page + 1
+      );
 
     }
 
@@ -912,9 +978,13 @@ ${item}
               (review.current_page > 0) ) {
 
       // load the prev objectlist and the last element there
-      review.get_object_list(review.current_reviewstatus,
-                             review.current_page - 1,
-                             'last');
+      review.get_object_list(
+        review.current_reviewstatus,
+        'end',
+        review.objectlist_start_keyid,
+        'last',
+        review.current_page - 1
+      );
 
     }
 
@@ -975,9 +1045,11 @@ ${item}
 
       // update the object list
       let objectlist_reviewtype = $('#objectlist-pref-select').val();
+
       review.get_object_list(
         objectlist_reviewtype,
-        review.current_page,
+        'start',
+        review.objectlist_start_keyid,
       );
 
     }).done(function () {

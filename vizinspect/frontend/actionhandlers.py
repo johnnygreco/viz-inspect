@@ -264,8 +264,8 @@ def worker_get_objects(
         review_status='all',
         userid=None,
         start_keyid=1,
+        end_keyid=None,
         max_objects=100,
-        getinfo='objectids',
         override_dbinfo=None,
         raiseonfail=False,
 ):
@@ -294,22 +294,25 @@ def worker_get_objects(
             n_pages = int(list_count/max_objects)
 
         # this returns a list of tuples (keyid, objectid)
-        objectlist, ret_start_keyid, ret_end_keyid = catalogs.get_objects(
-            (conn, meta),
-            review_status=review_status,
-            userid=userid,
-            start_keyid=start_keyid,
-            max_objects=max_objects,
-            getinfo=getinfo,
-            fast_fetch=True
+        objectlist, ret_start_keyid, ret_end_keyid, revorder = (
+            catalogs.get_objects(
+                (conn, meta),
+                review_status=review_status,
+                userid=userid,
+                start_keyid=start_keyid,
+                end_keyid=end_keyid,
+                max_objects=max_objects,
+                getinfo='objectids',
+                fast_fetch=True
+            )
         )
 
         # reform to a single list
-        returned_objectlist = [x[1] for x in objectlist]
+        returned_objectlist = sorted(list(set([x[1] for x in objectlist])))
 
         # this is the dict we return
         retdict = {
-            'objectlist': list(set(returned_objectlist)),
+            'objectlist': returned_objectlist,
             'start_keyid':ret_start_keyid,
             'end_keyid':ret_end_keyid,
             'object_count':list_count,
@@ -403,6 +406,7 @@ def worker_list_review_assignments(
         list_type='unassigned',
         user_id=None,
         start_keyid=1,
+        end_keyid=None,
         max_objects=500,
         override_dbinfo=None,
         raiseonfail=False,
@@ -438,17 +442,18 @@ def worker_list_review_assignments(
 
             (list_objects,
              list_start_keyid,
-             list_end_keyid) = catalogs.get_objects(
+             list_end_keyid, revorder) = catalogs.get_objects(
                  (conn, meta),
                  review_status='unassigned-all',
                  userid=None,
                  start_keyid=start_keyid,
+                 end_keyid=end_keyid,
                  max_objects=max_objects,
                  getinfo='objectids',
                  fast_fetch=True
             )
 
-            final_objects = list(set([x[1] for x in list_objects]))
+            final_objects = sorted(list(set([x[1] for x in list_objects])))
 
             # this is the dict we return
             retdict = {
@@ -478,11 +483,12 @@ def worker_list_review_assignments(
 
             (list_objects,
              list_start_keyid,
-             list_end_keyid) = catalogs.get_objects(
+             list_end_keyid, revorder) = catalogs.get_objects(
                  (conn, meta),
                  review_status='assigned-self',
                  userid=user_id,
                  start_keyid=start_keyid,
+                 end_keyid=end_keyid,
                  max_objects=max_objects,
                  getinfo='review-assignments',
                  fast_fetch=True
@@ -659,23 +665,47 @@ class ObjectListHandler(BaseHandler):
                 raise ValueError("Unknown review status requested: '%s'" %
                                  review_status)
 
-            start_keyid = int(
-                xhtml_escape(self.get_argument('start_keyid', '1'))
+            keytype = xhtml_escape(self.get_argument('keytype', 'start'))
+            keyid = int(
+                xhtml_escape(self.get_argument('keyid', '1'))
             )
-            max_objects = int(
-                xhtml_escape(self.get_argument('max_objects',
-                                               self.siteinfo['rows_per_page']))
-            )
+            max_objects = self.siteinfo['rows_per_page']
 
-            objectlist_info = yield self.executor.submit(
-                worker_get_objects,
-                review_status=review_status,
-                userid=self.current_user['user_id'],
-                start_keyid=start_keyid,
-                max_objects=max_objects,
-                getinfo='objectids',
-            )
+            if keytype.strip() == 'start':
 
+                objectlist_info = yield self.executor.submit(
+                    worker_get_objects,
+                    review_status=review_status,
+                    userid=self.current_user['user_id'],
+                    start_keyid=keyid,
+                    end_keyid=None,
+                    max_objects=max_objects,
+                )
+
+            elif keytype.strip() == 'end':
+
+                objectlist_info = yield self.executor.submit(
+                    worker_get_objects,
+                    review_status=review_status,
+                    userid=self.current_user['user_id'],
+                    start_keyid=None,
+                    end_keyid=keyid,
+                    max_objects=max_objects,
+                )
+
+            else:
+
+                objectlist_info = yield self.executor.submit(
+                    worker_get_objects,
+                    review_status=review_status,
+                    userid=self.current_user['user_id'],
+                    start_keyid=keyid,
+                    end_keyid=None,
+                    max_objects=max_objects,
+                )
+
+
+            # render the result
             if objectlist_info is not None:
 
                 retdict = {'status':'ok',

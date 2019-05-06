@@ -258,7 +258,6 @@
 
       <div class="row mt-2 justify-content-center">
         <div class="col-6 d-flex justify-content-center">
-          <h6>List pages: <span id="current-list-npages"></span></h6>
         </div>
       </div>
 
@@ -272,20 +271,15 @@
           </button>
         </div>
 
-        <div class="col-6 d-flex justify-content-center" >
+        <div class="col-6 d-flex align-items-center justify-content-center" >
 
-          <div class="input-group">
-            <input type="text"
-                   id="current-list-page" data-keyid="0"
-                   class="form-control form-control-sm"
-                   placeholder="current page"
-                   aria-label="current list page" aria-describedby="current-list-page-label">
-            <div class="input-group-append">
-              <button class="btn btn-outline-success btn-sm"
-                      type="button"
-                      id="jump-to-list-page">Jump</button>
-            </div>
-          </div>
+          Page
+          &nbsp;
+          <span id="current-pagenum" ></span>
+          &nbsp;
+          of
+          &nbsp;
+          <span id="current-list-npages"></span>
 
         </div>
 
@@ -361,7 +355,7 @@
     {% if current_user['user_role'] in ('authenticated','staff','superuser') %}
 
     // fire the main handler
-    review.get_object_list('all', 0, 'first');
+    review.get_object_list('all', 'start', 1, 'first');
 
     {% end %}
 

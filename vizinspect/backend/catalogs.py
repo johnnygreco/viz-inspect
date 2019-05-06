@@ -525,6 +525,7 @@ def get_objects(
         review_status='all',
         userid=None,
         start_keyid=1,
+        end_keyid=None,
         max_objects=50,
         getinfo='objectids',
         dbkwargs=None,
@@ -684,9 +685,9 @@ def get_objects(
              object_catalog_sample.c.objectid,
              func.array_agg(object_reviewers.c.userid).label("reviewer_userid")]
         ).select_from(join).group_by(
-            object_catalog_sample.c.id
-        ).group_by(
             object_catalog_sample.c.objectid
+        ).group_by(
+            object_catalog_sample.c.id
         )
 
     else:
@@ -740,19 +741,58 @@ def get_objects(
     else:
         actual_sel = sel
 
+    #
     # add in the pagination
-    if start_keyid is not None and max_objects is not None:
+    #
+
+    # if only start_keyid is provided
+    if (start_keyid is not None and
+        end_keyid is None and
+        max_objects is not None):
         paged_sel = actual_sel.where(
             object_catalog_sample.c.id >= start_keyid
         ).order_by(object_catalog_sample.c.id).limit(max_objects)
+        revorder = False
 
-    elif start_keyid is not None and max_objects is None:
+    elif (start_keyid is not None and
+          end_keyid is None and
+          max_objects is None):
         paged_sel = actual_sel.where(
             object_catalog_sample.c.id >= start_keyid
-        )
+        ).order_by(object_catalog_sample.c.id)
+        revorder = False
+
+    # if only end_keyid is provided
+    elif (start_keyid is None and
+          end_keyid is not None and
+          max_objects is not None):
+        paged_sel = actual_sel.where(
+            object_catalog_sample.c.id <= end_keyid
+        ).order_by(object_catalog_sample.c.id.desc()).limit(max_objects)
+        revorder = True
+
+    elif (start_keyid is None and
+          end_keyid is not None and
+          max_objects is None):
+        paged_sel = actual_sel.where(
+            object_catalog_sample.c.id <= end_keyid
+        ).order_by(object_catalog_sample.c.id.desc())
+        revorder = True
+
+    # if both are provided
+    elif (start_keyid is not None and
+          end_keyid is not None):
+        paged_sel = actual_sel.where(
+            object_catalog_sample.c.id >= start_keyid
+        ).where(
+            object_catalog_sample.c.id <= end_keyid
+        ).order_by(object_catalog_sample.c.id)
+        revorder = False
+
+    # everything else has no pagination
     else:
         paged_sel = actual_sel
-
+        revorder = False
 
     with conn.begin():
 
@@ -760,8 +800,13 @@ def get_objects(
         if fast_fetch:
             rows = res.fetchall()
             if len(rows) > 0:
-                ret_start_keyid = rows[0][0]
-                ret_end_keyid = rows[-1][0]
+                if not revorder:
+                    ret_start_keyid = rows[0][0]
+                    ret_end_keyid = rows[-1][0]
+                else:
+                    ret_start_keyid = rows[-1][0]
+                    ret_end_keyid = rows[0][0]
+
             else:
                 ret_start_keyid = 1
                 ret_end_keyid = 1
@@ -770,8 +815,13 @@ def get_objects(
                 {column: value for column, value in row.items()} for row in res
             ]
             if len(rows) > 0:
-                ret_start_keyid = rows[0]['keyid']
-                ret_end_keyid = rows[-1]['keyid']
+                if not revorder:
+                    ret_start_keyid = rows[0]['keyid']
+                    ret_end_keyid = rows[-1]['keyid']
+                else:
+                    ret_start_keyid = rows[-1]['keyid']
+                    ret_end_keyid = rows[0]['keyid']
+
             else:
                 ret_end_keyid = 1
                 ret_end_keyid = 1
@@ -784,7 +834,7 @@ def get_objects(
         meta.bind = None
         engine.dispose()
 
-    return rows, ret_start_keyid, ret_end_keyid
+    return rows, ret_start_keyid, ret_end_keyid, revorder
 
 
 
