@@ -609,8 +609,6 @@ class ObjectListHandler(BaseHandler):
             Sets the type of list retrieval:
 
             - 'all' -> all objects
-            - 'reviewed-all' -> all objects that have been reviewed
-            - 'unreviewed-all' -> all objects that have not been reviewed
             - 'reviewed-self' -> objects reviewed by this user
             - 'reviewed-other' -> objects reviewed by other users
             - 'assigned-self' -> objects assigned to this user
@@ -658,8 +656,6 @@ class ObjectListHandler(BaseHandler):
                                      'assigned-self',
                                      'assigned-reviewed',
                                      'assigned-unreviewed',
-                                     'reviewed-all',
-                                     'unreviewed-all',
                                      'reviewed-self',
                                      'reviewed-other'):
                 raise ValueError("Unknown review status requested: '%s'" %

@@ -670,13 +670,7 @@ var review = {
       // update the object list type
       let index_label = 'Current object (browsing all objects)';
 
-      if (review_status === 'reviewed-all') {
-        index_label = "Current object (in everyone's reviewed objects)";
-      }
-      else if (review_status === 'unreviewed-all') {
-        index_label = "Current object (in everyone's unreviewed objects)";
-      }
-      else if (review_status === 'reviewed-self') {
+      if (review_status === 'reviewed-self') {
         index_label = 'Current object (in objects reviewed by me)';
       }
       else if (review_status === 'reviewed-other') {
@@ -721,7 +715,6 @@ var review = {
         '<span class="sr-only">Loading...</span>' +
         '</div>'
     );
-
 
     // fire the request to the backend
     $.getJSON(url, function(data) {

@@ -517,15 +517,22 @@ class UserAdminHandler(BaseHandler):
                 updated_fullname = self.get_argument('updated_fullname')
                 updated_role = self.get_argument('updated_role')
 
-                updatedict = {
-                    'email':updated_email,
-                    'full_name':updated_fullname,
-                    'user_role':updated_role
-                }
+                # update the is_active flag along with role changes
+                if updated_role == 'locked':
+                    is_active = False
+                else:
+                    is_active = True
 
                 reqtype = 'user-edit'
 
                 if current_user_role == 'superuser':
+
+                    updatedict = {
+                        'email':updated_email,
+                        'full_name':updated_fullname,
+                        'user_role':updated_role,
+                        'is_active': is_active,
+                    }
 
                     target_userid = int(
                         xhtml_escape(
@@ -542,6 +549,11 @@ class UserAdminHandler(BaseHandler):
                     }
 
                 else:
+
+                    updatedict = {
+                        'email':updated_email,
+                        'full_name':updated_fullname,
+                    }
 
                     target_userid = current_user_id
 

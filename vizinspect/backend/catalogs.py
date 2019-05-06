@@ -352,12 +352,7 @@ def get_object_count(
     ).select_from(join)
 
     # figure out the where condition
-    if review_status == 'unreviewed-all':
-        actual_sel = sel.where(object_comments.c.added == None)
-    elif review_status == 'reviewed-all':
-        actual_sel = sel.where(object_comments.c.added != None)
-
-    elif review_status == 'reviewed-self' and userid is not None:
+    if review_status == 'reviewed-self' and userid is not None:
         actual_sel = sel.where(
             object_comments.c.userid == userid
         ).where(
