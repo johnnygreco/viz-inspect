@@ -677,7 +677,7 @@ def get_objects(
         sel = select([
             object_catalog_sample.c.id,
             object_catalog_sample.c.objectid
-        ]).select_from(join)
+        ]).select_from(join).distinct()
 
     elif getinfo == 'review-assignments':
         sel = select(
@@ -694,7 +694,7 @@ def get_objects(
         sel = select([
             object_catalog_sample.c.id,
             object_catalog_sample.c.objectid
-        ]).select_from(join)
+        ]).select_from(join).distinct()
 
     # figure out the where condition
     if review_status == 'unreviewed-all':
