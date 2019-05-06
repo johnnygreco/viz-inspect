@@ -1653,8 +1653,6 @@ def delete_user(payload,
     )
     sessions_delete = sessions.delete().where(
         sessions.c.user_id == payload['user_id']
-    ).where(
-        users.c.user_role != 'superuser'
     )
     sessions_result = currproc.connection.execute(sessions_delete)
     users_result = currproc.connection.execute(users_delete)
