@@ -534,6 +534,9 @@ class UserAdminHandler(BaseHandler):
                         'is_active': is_active,
                     }
 
+                    if is_active:
+                        updatedict['email_verified'] = True
+
                     target_userid = int(
                         xhtml_escape(
                             self.get_argument('target_userid')
