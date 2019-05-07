@@ -1168,8 +1168,7 @@ class DeleteUserHandler(BaseHandler):
             (self.current_user['is_active']) and
             (self.current_user['user_role'] in ('authenticated',
                                                 'superuser',
-                                                'staff')) and
-            (self.current_user['email_verified'])):
+                                                'staff'))):
 
             try:
 
