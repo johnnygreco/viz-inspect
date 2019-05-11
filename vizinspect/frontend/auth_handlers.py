@@ -416,8 +416,16 @@ class NewUserHandler(BaseHandler):
             )
 
             # get this server's base URL
-            server_baseurl = '%s://%s' % (self.request.protocol,
-                                          self.request.host)
+            if self.request.headers.get('X-Real-Host'):
+                server_baseurl = '%s://%s' % (
+                    self.request.protocol,
+                    self.request.headers.get('X-Real-Host')
+                )
+            else:
+                server_baseurl = '%s://%s' % (self.request.protocol,
+                                              self.request.host)
+
+
             ok, resp, msgs = yield self.authnzerver_request(
                 'user-signup-email',
                 {'email_address':email,
@@ -719,8 +727,14 @@ class ForgotPassStep1Handler(BaseHandler):
                     )
 
                     # get this server's base URL
-                    server_baseurl = '%s://%s' % (self.request.protocol,
-                                                  self.request.host)
+                    if self.request.headers.get('X-Real-Host'):
+                        server_baseurl = '%s://%s' % (
+                            self.request.protocol,
+                            self.request.headers.get('X-Real-Host')
+                        )
+                    else:
+                        server_baseurl = '%s://%s' % (self.request.protocol,
+                                                      self.request.host)
 
                     ok, resp, msgs = yield self.authnzerver_request(
                         'user-forgotpass-email',
