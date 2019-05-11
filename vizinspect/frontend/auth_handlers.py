@@ -418,7 +418,7 @@ class NewUserHandler(BaseHandler):
             # get this server's base URL
             if self.request.headers.get('X-Real-Host'):
                 server_baseurl = '%s://%s' % (
-                    self.request.protocol,
+                    self.request.headers.get('X-Forwarded-Proto'),
                     self.request.headers.get('X-Real-Host')
                 )
             else:
@@ -729,7 +729,7 @@ class ForgotPassStep1Handler(BaseHandler):
                     # get this server's base URL
                     if self.request.headers.get('X-Real-Host'):
                         server_baseurl = '%s://%s' % (
-                            self.request.protocol,
+                            self.request.headers.get('X-Forwarded-Proto'),
                             self.request.headers.get('X-Real-Host')
                         )
                     else:
