@@ -505,7 +505,7 @@ class BaseHandler(tornado.web.RequestHandler):
     @gen.coroutine
     def new_session_token(self,
                           user_id=2,
-                          expires_days=7,
+                          expires_days=None,
                           extra_info=None):
         '''
         This is a shortcut function to request a new session token.
@@ -513,6 +513,9 @@ class BaseHandler(tornado.web.RequestHandler):
         Also sets the server_session cookie.
 
         '''
+
+        if expires_days is None:
+            expires_days = self.session_expiry
 
         user_agent = self.request.headers.get('User-Agent')
         if not user_agent:

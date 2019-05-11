@@ -538,7 +538,6 @@ class VerifyUserHandler(BaseHandler):
         try:
 
             email = xhtml_escape(self.get_argument('email'))
-            password = self.get_argument('password')
             verification = xhtml_escape(self.get_argument('verificationcode'))
 
             # check the verification code to see if it's valid
@@ -557,63 +556,26 @@ class VerifyUserHandler(BaseHandler):
             # them in by checking the provided email address and password
             if verified_ok:
 
-                login_ok, resp, msgs = yield self.authnzerver_request(
-                    'user-login',
-                    {'session_token':current_user['session_token'],
-                     'email':email,
-                     'password':password}
+                yield self.new_session_token()
+
+                self.save_flash_messages(
+                    "Verification successful! "
+                    "Please sign in with your email address and password.",
+                    "primary"
                 )
-
-                if login_ok:
-
-                    # this is saved so we can change the ownership of the anon
-                    # user's current datasets.
-                    current_session_token = self.current_user['session_token']
-
-                    # FIXME: change the ownership for all of the datasets that
-                    # the user made with their current session_token
-                    LOGGER.warning(
-                        'changing ownership of datasets made '
-                        'by anonymous user with session_token to '
-                        'their new user_id = %s' % current_session_token
-                    )
-
-                    # generate a new session token matching the user_id
-                    # when we login successfully
-                    yield self.new_session_token(
-                        user_id=resp['user_id'],
-                        expires_days=self.session_expiry
-                    )
-                    self.save_flash_messages(
-                        "Thanks for verifying your email address! "
-                        "Your account is fully activated and "
-                        "you're now logged in.",
-                        "primary"
-                    )
-
-                    # redirect to their home page
-                    self.redirect('/users/home')
-
-                else:
-
-                    yield self.new_session_token()
-
-                    self.save_flash_messages(
-                        "Sorry, there was a problem verifying "
-                        "your account sign up. "
-                        "Please try again or contact us if this doesn't work.",
-                        "warning"
-                    )
-                    self.redirect('/users/verify')
+                self.redirect('/users/login')
 
             else:
+
+                LOGGER.error("Could not verify sign up token for email: %s" %
+                             email)
 
                 yield self.new_session_token()
 
                 self.save_flash_messages(
                     "Sorry, there was a problem verifying "
                     "your account sign up. "
-                    "Please try again or contact us if this doesn't work.",
+                    "Please contact us if this doesn't work.",
                     "warning"
                 )
                 self.redirect('/users/verify')
@@ -625,7 +587,7 @@ class VerifyUserHandler(BaseHandler):
 
             self.save_flash_messages(
                 "Sorry, there was a problem verifying your account sign up. "
-                "Please try again or contact us if this doesn't work.",
+                "Please contact us if this doesn't work.",
                 "warning",
             )
             LOGGER.exception(
