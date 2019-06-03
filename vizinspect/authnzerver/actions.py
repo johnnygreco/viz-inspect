@@ -1093,7 +1093,7 @@ def change_user_role(payload,
 def validate_input_password(email,
                             password,
                             min_length=12,
-                            max_match_threshold=20):
+                            max_match_threshold=60):
     '''This validates user input passwords.
 
     1. must be at least min_length characters (we'll truncate the password at
@@ -1174,7 +1174,7 @@ def change_user_password(payload,
                          raiseonfail=False,
                          override_authdb_path=None,
                          min_pass_length=12,
-                         max_similarity=30):
+                         max_similarity=60):
     '''This changes the user's password.
 
     '''
@@ -1340,7 +1340,7 @@ def change_user_password(payload,
 
 def create_new_user(payload,
                     min_pass_length=12,
-                    max_similarity=30,
+                    max_similarity=60,
                     raiseonfail=False,
                     override_authdb_path=None):
     '''This makes a new user.
@@ -2427,7 +2427,7 @@ def verify_password_reset(payload,
                           raiseonfail=False,
                           override_authdb_path=None,
                           min_pass_length=12,
-                          max_similarity=30):
+                          max_similarity=60):
     '''
     This verifies a password reset request.
 
