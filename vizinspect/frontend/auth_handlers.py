@@ -464,7 +464,7 @@ class NewUserHandler(BaseHandler):
 
         # if the sign up request fails, tell the user what happened
         else:
-
+            LOGGER.error("Could not complete sign up request: %r" % msgs)
             self.save_flash_messages(
                 " ".join(msgs),
                 "danger"
