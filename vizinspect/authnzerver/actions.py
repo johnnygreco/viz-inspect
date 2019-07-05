@@ -1174,7 +1174,7 @@ def change_user_password(payload,
                          raiseonfail=False,
                          override_authdb_path=None,
                          min_pass_length=12,
-                         max_similarity=30):
+                         max_similarity=60):
     '''This changes the user's password.
 
     '''
@@ -1340,7 +1340,7 @@ def change_user_password(payload,
 
 def create_new_user(payload,
                     min_pass_length=12,
-                    max_similarity=30,
+                    max_similarity=60,
                     raiseonfail=False,
                     override_authdb_path=None):
     '''This makes a new user.
@@ -2427,7 +2427,7 @@ def verify_password_reset(payload,
                           raiseonfail=False,
                           override_authdb_path=None,
                           min_pass_length=12,
-                          max_similarity=30):
+                          max_similarity=60):
     '''
     This verifies a password reset request.
 
