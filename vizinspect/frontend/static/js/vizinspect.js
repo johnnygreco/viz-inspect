@@ -748,10 +748,20 @@ var review = {
         $('#current-source-index').val(objectinfo.objectid);
         $('#current-source-index').attr('data-keyid', objectinfo.keyid);
 
+        // update the Legacy Survey URL
+        $('#legacy-at-loc').attr(
+          'href',
+          `http://legacysurvey.org/viewer?ra=${objectinfo.ra}&dec=${objectinfo.dec}&zoom=15&layer=hsc2`
+        );
+
         // update the hscMap URL
+          
+        var src_ra = objectinfo.ra * Math.PI / 180.0
+        var src_dec = objectinfo.dec * Math.PI / 180.0
+
         $('#hsc-map-at-loc').attr(
           'href',
-          `http://legacysurvey.org/viewer?ra=${objectinfo.ra}&dec=${objectinfo.dec}&zoom=15&layer=decals-dr7`
+          `https://hscdata.mtk.nao.ac.jp/hsc_ssp/dr2/s18a/hscMap/app/#/?_=%7B%22view%22:%7B%22a%22:${src_ra}%2C%22d%22:${src_dec}%2C%22fovy%22:0.0002%2C%22roll%22:0%7D%2C%22sspParams%22:%7B%22type%22:%22SDSS_TRUE_COLOR%22%2C%22filter%22:%5B%22HSC-I%22%2C%22HSC-R%22%2C%22HSC-G%22%5D%2C%22simpleRgb%22:%7B%22beta%22:22026.465794806718%2C%22a%22:1%2C%22bias%22:0.05%2C%22b0%22:0%7D%2C%22sdssTrueColor%22:%7B%22beta%22:22026.465794806718%2C%22a%22:1%2C%22bias%22:0.05%2C%22b0%22:0%7D%7D%7D`
         );
 
         // update the main table
