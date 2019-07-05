@@ -1093,7 +1093,7 @@ def change_user_role(payload,
 def validate_input_password(email,
                             password,
                             min_length=12,
-                            max_match_threshold=20):
+                            max_match_threshold=60):
     '''This validates user input passwords.
 
     1. must be at least min_length characters (we'll truncate the password at
