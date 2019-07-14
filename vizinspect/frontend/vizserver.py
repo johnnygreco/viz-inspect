@@ -28,6 +28,9 @@ from datetime import datetime
 import subprocess
 from functools import partial
 
+import numpy as np
+
+
 # setup signal trapping on SIGINT
 def recv_sigint(signum, stack):
     '''
@@ -36,7 +39,6 @@ def recv_sigint(signum, stack):
     '''
     raise KeyboardInterrupt
 
-import numpy as np
 
 class FrontendEncoder(json.JSONEncoder):
     '''
@@ -64,6 +66,7 @@ class FrontendEncoder(json.JSONEncoder):
         else:
             return json.JSONEncoder.default(self, obj)
 
+
 # this replaces the default encoder and makes it so Tornado will do the right
 # thing when it converts dicts to JSON when a
 # tornado.web.RequestHandler.write(dict) is called.
@@ -80,7 +83,7 @@ try:
     import uvloop
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     IOLOOP_SPEC = 'uvloop'
-except Exception as e:
+except Exception:
     HAVE_UVLOOP = False
     IOLOOP_SPEC = 'asyncio'
 
@@ -89,6 +92,7 @@ import tornado.httpserver
 import tornado.web
 import tornado.options
 from tornado.options import define, options
+
 
 ###############################
 ### APPLICATION SETUP BELOW ###
@@ -170,7 +174,7 @@ define('imagedir',
        type=str)
 
 define('flagkeys',
-       default='candy,junk,tidal,cirrus',
+       default='galaxy, candy, junk, tidal, outskirts, cirrus',
        help=("This tells the server what object flags to use for the catalog."),
        type=str)
 
@@ -180,7 +184,6 @@ define('firststart',
              "that we're starting over from scratch "
              "and to recreate all the DBs, etc.."),
        type=bool)
-
 
 
 ###########
@@ -196,7 +199,7 @@ def setup_worker(siteinfo):
 
     '''
 
-    from ..backend import database, catalogs
+    from ..backend import database
 
     # unregister interrupt signals so they don't get to the worker
     # and the executor can kill them cleanly (hopefully)
@@ -228,7 +231,6 @@ def setup_worker(siteinfo):
         currproc.bucket_client = None
 
 
-
 def close_database():
 
     '''This is used to close the database when the worker loop
@@ -250,7 +252,6 @@ def close_database():
 
     print('Shutting down database engine in process: %s' % currproc.name,
           file=sys.stdout)
-
 
 
 ############
@@ -287,7 +288,6 @@ def main():
     from . import actionhandlers as actions
     from . import admin_handlers as admin
 
-
     ###################
     ## SET UP CONFIG ##
     ###################
@@ -299,8 +299,8 @@ def main():
         '''
 
         cmd = (
-            "find {imagedir} -type f -name '*.png' "
-            "-mtime +{mtime} -exec rm -v '{{}}' \;"
+            r"find {imagedir} -type f -name '*.png' "
+            r"-mtime +{mtime} -exec rm -v '{{}}' \;"
         ).format(imagedir=imagedir,
                  mtime=retention_days)
 
@@ -311,9 +311,8 @@ def main():
             ndeleted = len(proc.stdout.decode().split('\n'))
             LOGGER.warning('%s files older than %s days deleted.' %
                            (ndeleted, retention_days))
-        except Exception as e:
+        except Exception:
             LOGGER.exception('Could not delete old files.')
-
 
     MAXWORKERS = options.backgroundworkers
 
@@ -341,7 +340,6 @@ def main():
         LOGGER
     )
 
-
     # check if there's a first_start_done file to see if we need to copy over a
     # site-info.json and email-server.json file to the basedir. also copy over
     # the example bits
@@ -362,7 +360,7 @@ def main():
                                                      'data',
                                                      'site-info.json')),
                         os.path.abspath(options.basedir))
-        except FileExistsError as e:
+        except FileExistsError:
             LOGGER.warning("site-info.json already exists "
                            "in the basedir. Not overwriting.")
 
@@ -373,14 +371,14 @@ def main():
                                                      'data',
                                                      'email-server.json')),
                         os.path.abspath(options.basedir))
-        except FileExistsError as e:
+        except FileExistsError:
             LOGGER.warning("email-server.json already exists "
                            "in the basedir. Not overwriting.")
 
         # make a default data directory
         try:
             os.makedirs(os.path.join(options.basedir,'viz-inspect-data'))
-        except FileExistsError as e:
+        except FileExistsError:
             LOGGER.warning("The output plot PNG directory already "
                            "exists in the basedir. Not overwriting.")
 
@@ -390,6 +388,59 @@ def main():
         siteinfojson = os.path.join(BASEDIR, 'site-info.json')
         with open(siteinfojson,'r') as infd:
             SITEINFO = json.load(infd)
+
+        # 0a. confirm the flags to be used for this project
+        LOGGER.info('Please confirm the object flags '
+                    'that will be used for this project.')
+        flag_keys = input("Object flags [default: %s]: " %
+                          options.flagkeys)
+        if not flag_keys or len(flag_keys.strip()) == 0:
+            set_flag_keys = options.flagkeys
+        else:
+            set_flag_keys = flag_keys
+            SITEINFO['flag_keys'] = set_flag_keys
+
+        # 0a. confirm the good flags
+        LOGGER.info("Which object flags are associated with 'good' objects?")
+        good_flag_keys = input("Good object flags [default: galaxy, candy]: ")
+        if not good_flag_keys or len(flag_keys.strip()) == 0:
+            set_good_flag_keys = 'galaxy, candy'
+        else:
+            set_good_flag_keys = good_flag_keys
+            SITEINFO['good_flag_keys'] = set_good_flag_keys
+
+        # 0b. confirm the bad flags
+        LOGGER.info("Which object flags are associated with 'bad' objects?")
+        bad_flag_keys = input("Bad object flags [default: cirrus, junk]: ")
+        if not bad_flag_keys or len(flag_keys.strip()) == 0:
+            set_bad_flag_keys = 'cirrus, junk'
+        else:
+            set_bad_flag_keys = bad_flag_keys
+            SITEINFO['bad_flag_keys'] = set_bad_flag_keys
+
+        # 0c. confirm how many good flags are needed for object completion
+        LOGGER.info("How many votes for 'good' flags are required to mark an "
+                    "object as complete?")
+        max_good_votes = input("Maximum good flag votes [default: 2]: ")
+        if not max_good_votes or len(flag_keys.strip()) == 0:
+            set_max_good_votes = 2
+        else:
+            set_max_good_votes = int(max_good_votes)
+            if set_max_good_votes <= 0:
+                set_max_good_votes = 2
+            SITEINFO['max_good_votes'] = set_max_good_votes
+
+        # 0c. confirm how many bad flags are needed for object completion
+        LOGGER.info("How many votes for 'bad' flags are required to mark an "
+                    "object as complete?")
+        max_bad_votes = input("Maximum bad flag votes [default: 2]: ")
+        if not max_bad_votes or len(flag_keys.strip()) == 0:
+            set_max_bad_votes = 2
+        else:
+            set_max_bad_votes = int(max_bad_votes)
+            if set_max_bad_votes <= 0:
+                set_max_bad_votes = 2
+            SITEINFO['max_bad_votes'] = set_max_bad_votes
 
         # 1. check if the --catalogcsv arg is present
         if (options.catalogcsv is not None and
@@ -407,7 +458,6 @@ def main():
 
             LOGGER.info("First time setup requires a catalog CSV to load.")
             catalog_path = input("Catalog CSV location: ")
-
 
         # 2. check if the --imagedir arg is present
         if (options.imagedir is not None and
@@ -496,7 +546,6 @@ def main():
             SITEINFO['endpoint'] = None
             SITEINFO['images_are_remote'] = False
 
-
         # ask for the length of time in days that downloaded images
         # and generated plots will be left around
         LOGGER.info("To save local disk space, "
@@ -548,7 +597,6 @@ def main():
 
         SITEINFO['rows_per_page'] = rows_per_page
 
-
         #
         # done with config
         #
@@ -566,7 +614,7 @@ def main():
         try:
             database.new_vizinspect_db(set_database_url,
                                        database.VIZINSPECT)
-        except Exception as e:
+        except Exception:
             LOGGER.warning("The required tables already exist. "
                            "Will add this catalog to them.")
 
@@ -590,7 +638,10 @@ def main():
             (set_database_url,
              database.VIZINSPECT),
             overwrite=overwrite,
-            flags_to_use=options.flagkeys.split(','))
+            flags_to_use=[
+                x.strip() for x in SITEINFO['flag_keys'].split(',')
+            ]
+        )
 
         if loaded:
             LOGGER.info("Objects loaded into catalog successfully.")
