@@ -736,7 +736,8 @@ var review = {
         review.current_readonly = readonly;
 
         // update the plot
-        $('#galaxy-main-plot').attr('src','/viz-inspect-data/' + objectplot);
+        //$('#galaxy-main-plot').attr('src','/viz-inspect-data/' + objectplot);
+        $('#galaxy-main-plot').attr('src','https://hugs.johnnygreco.space/hugs-' + objectinfo.objectid + '.png');
         $('#galaxy-main-plot').attr('data-sourceindex', objectinfo.objectid);
         $('#galaxy-main-plot').attr('data-ra', objectinfo.ra);
         $('#galaxy-main-plot').attr('data-dec', objectinfo.dec);
@@ -795,11 +796,12 @@ var review = {
         }
 
         // clean out the flag button group
-        $('#flag-button-group').empty();
+        $('#flag-button-group-1').empty();
+        $('#flag-button-group-2').empty();
 
         if (review.current_readonly) {
 
-          $('#flag-button-group').html(
+          $('#flag-button-group-1').html(
             '<div class="row"><div class="col-12">' +
               'This object is assigned to another user for review.' +
               '</div></div>'
@@ -808,17 +810,48 @@ var review = {
 
         else {
 
-          for (let item of ['candy', 'junk', 'tidal', 'cirrus']) {
+          for (let item of ['candy', 'galaxy', 'junk']) {
 
             let color = 'info';
 
             if (item == 'candy') {
               color = 'primary';
             }
+            else if (item == 'galaxy') {
+              color = 'success';
+            }
             else if (item == 'junk') {
               color = 'danger';
             }
-            else if (item == 'tidal') {
+
+            let checked = objectinfo.user_flags[item];
+            let button_activated = '';
+            if (checked) {
+              button_activated = 'active';
+            }
+            let button_disabled = '';
+
+            if (review.current_readonly) {
+              button_disabled = 'disabled';
+            }
+
+            let thisrow = `
+<button type="button" data-state="${button_activated}" data-value="${item}" data-toggle="button" autocomplete="off"
+id="check-${item}" class="mx-2 mt-1 btn btn-lg btn-block btn-${color} object-flags-button ${button_activated}" ${button_disabled}>
+${item}
+</button>`;
+
+            $('#flag-button-group-1').append(thisrow);
+         }
+
+          for (let item of ['tidal', 'halo', 'cirrus']) {
+
+            let color = 'info';
+
+            if (item == 'tidal') {
+              color = 'secondary';
+            }
+            else if (item == 'halo') {
               color = 'warning';
             }
             else if (item == 'cirrus') {
@@ -838,11 +871,11 @@ var review = {
 
             let thisrow = `
 <button type="button" data-state="${button_activated}" data-value="${item}" data-toggle="button" autocomplete="off"
-id="check-${item}" class="mx-1 btn btn-lg btn-${color} object-flags-button ${button_activated}" ${button_disabled}>
+id="check-${item}" class="mx-2 mt-1 btn btn-lg btn-block btn-${color} object-flags-button ${button_activated}" ${button_disabled}>
 ${item}
 </button>`;
 
-            $('#flag-button-group').append(thisrow);
+            $('#flag-button-group-2').append(thisrow);
 
           }
 

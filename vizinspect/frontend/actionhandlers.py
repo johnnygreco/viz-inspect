@@ -217,14 +217,14 @@ def worker_get_object(
 
         objectinfo_dict['filepath'] = 'redacted'
 
-        objectplot = worker_make_plot(
-            objectid,
-            basedir,
-            random_sample_percent=random_sample_percent,
-            override_dbinfo=override_dbinfo,
-            override_client=override_client,
-            raiseonfail=raiseonfail
-        )
+        objectplot = 'none' #worker_make_plot(
+            #objectid,
+            #basedir,
+            #random_sample_percent=random_sample_percent,
+            #override_dbinfo=override_dbinfo,
+            #override_client=override_client,
+            #raiseonfail=raiseonfail
+        #)
 
         # set the readonly flag
         if (len(objectinfo_dict['reviewer_userid']) > 0 and
@@ -833,7 +833,7 @@ class LoadObjectHandler(BaseHandler):
             self.finish()
 
             # when we're done with this object, see if we need to plot neighbors
-            if neighborhood is not None:
+            if False: #neighborhood is not None:
 
                 # we'll only make plots for up to 7 other objects
                 for neighbor in neighborhood[:7]:
