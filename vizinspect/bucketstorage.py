@@ -51,8 +51,8 @@ import boto3
 
 def client(
         keyfile,
-        region='sfo2',
-        endpoint='https://sfo2.digitaloceanspaces.com'
+        region='nyc3',
+        endpoint='https://hugs.johnnygreco.space'
 ):
     '''This makes a new bucket client.
 

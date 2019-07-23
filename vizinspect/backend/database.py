@@ -32,7 +32,6 @@ from sqlalchemy.types import TIMESTAMP
 
 VIZINSPECT = MetaData()
 
-
 Catalog = Table(
     'object_catalog',
     VIZINSPECT,
@@ -48,7 +47,7 @@ Catalog = Table(
     Column('ra', Float, nullable=False),
     Column('dec', Float, nullable=False),
     Column('user_flags', postgresql.JSONB),
-    Column('reviewer_userid', Integer, index=True),
+#    Column('reviewer_userid', Integer, index=True),
     Column('extra_columns', postgresql.JSONB),
 )
 
@@ -83,18 +82,15 @@ Comments = Table(
     Column('objectid', Integer, ForeignKey('object_catalog.objectid'),
            nullable=False, index=True),
     Column('userid', Integer, nullable=False, index=True),
+    Column('reviewer_1', Integer, default=-99, nullable=False),
+    Column('reviewer_2', Integer, default=-99, nullable=False),
+    Column('reviewer_3', Integer, default=-99, nullable=False),
+    Column('score', Integer, default=0, nullable=False),
+    Column('num_votes', Integer, default=0, nullable=False),
     Column('username', Text, index=True),
     # this is the per-user set flags
-    Column('user_flags',postgresql.JSONB),
+    Column('user_flags', postgresql.JSONB),
     Column('contents', Text),
-)
-
-Reviewers = Table(
-    'object_reviewers',
-    VIZINSPECT,
-    Column('objectid', Integer, ForeignKey('object_catalog.objectid'),
-           nullable=False, index=True),
-    Column('userid',Integer, index=True, nullable=True),
 )
 
 

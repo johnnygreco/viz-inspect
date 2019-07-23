@@ -72,6 +72,7 @@ import bleach
 from tqdm import tqdm
 
 from .database import get_postgres_db, json_dumps
+default_flags = ('candy','galaxy', 'outskirts', 'junk', 'tidal', 'cirrus')
 
 
 #########################
@@ -84,7 +85,7 @@ def load_catalog(catalog_fpath,
                  overwrite=False,
                  dbkwargs=None,
                  object_imagefile_pattern='hugs-{objectid}.png',
-                 flags_to_use=('candy','junk','tidal','cirrus'),
+                 flags_to_use=default_flags,
                  **pdkwargs):
     '''This loads the catalog into the vizinspect database object_catalog table.
 
@@ -343,53 +344,31 @@ def get_object_count(
     # prepare the select
     object_catalog = meta.tables['object_catalog']
     object_comments = meta.tables['object_comments']
-    object_reviewers = meta.tables['object_reviewers']
+    #object_reviewers = meta.tables['object_reviewers']
 
-    join = object_catalog.outerjoin(object_comments).outerjoin(object_reviewers)
+    join = object_catalog.outerjoin(object_comments)#.outerjoin(object_reviewers)
 
     sel = select(
         [func.count(distinct(object_catalog.c.id))]
     ).select_from(join)
 
     # figure out the where condition
-    if review_status == 'reviewed-self' and userid is not None:
-        actual_sel = sel.where(
-            object_comments.c.userid == userid
-        ).where(
-            object_comments.c.added != None
-        )
-    elif review_status == 'reviewed-other' and userid is not None:
-        actual_sel = sel.where(
-            object_comments.c.userid != userid
-        ).where(
-            object_comments.c.added != None
-        )
-    elif review_status == 'assigned-self' and userid is not None:
-        actual_sel = sel.where(
-            object_reviewers.c.userid == userid
-        )
-    elif review_status == 'assigned-reviewed' and userid is not None:
-        actual_sel = sel.where(
-            object_reviewers.c.userid == userid
-        ).where(
-            object_comments.c.added != None
-        )
-    elif review_status == 'assigned-unreviewed' and userid is not None:
-        actual_sel = sel.where(
-            object_reviewers.c.userid == userid
-        ).where(
-            object_comments.c.added == None
-        )
-    elif review_status == 'assigned-all':
-        actual_sel = sel.where(
-            object_reviewers.c.userid != None
-        )
-    elif review_status == 'unassigned-all':
-        actual_sel = sel.where(
-            object_reviewers.c.userid == None
-        )
-    else:
+    if review_status == 'all' and userid is not None:
         actual_sel = sel
+    elif review_status == 'incomplete' and userid is not None:
+        actual_sel = sel.where(
+            ((object_comments.c.reviewer_1 != userid) &\
+            (object_comments.c.reviewer_2 != userid) &\
+            (object_comments.c.reviewer_3 != userid) &\
+            (object_comments.c.num_votes +\
+            func.abs(object_comments.c.score) < 4)) |\
+            (object_comments.c.added == None)
+        )
+    elif review_status == 'complete' and userid is not None:
+        actual_sel = sel.where(
+            (object_comments.c.num_votes +\
+             func.abs(object_comments.c.score)) >= 4
+        )
 
     with conn.begin():
         res = conn.execute(actual_sel)
@@ -469,13 +448,11 @@ def get_object(objectid,
     object_catalog = meta.tables['object_catalog']
     object_images = meta.tables['object_images']
     object_comments = meta.tables['object_comments']
-    object_reviewers = meta.tables['object_reviewers']
+    #object_reviewers = meta.tables['object_reviewers']
 
     join = object_catalog.join(
         object_images
-    ).outerjoin(
-        object_comments
-    ).outerjoin(object_reviewers)
+    ).outerjoin(object_comments)
 
     sel = select(
         [object_catalog.c.id.label('keyid'),
@@ -483,7 +460,7 @@ def get_object(objectid,
          object_catalog.c.ra,
          object_catalog.c.dec,
          object_catalog.c.user_flags,
-         object_reviewers.c.userid.label("reviewer_userid"),
+         #object_reviewers.c.userid.label("reviewer_userid"),
          object_catalog.c.extra_columns,
          object_images.c.filepath,
          object_comments.c.added.label("comment_added_on"),
@@ -517,7 +494,7 @@ def get_object(objectid,
 
 def get_objects(
         dbinfo,
-        review_status='all',
+        review_status='incomplete',
         userid=None,
         start_keyid=1,
         end_keyid=None,
@@ -547,16 +524,9 @@ def get_objects(
 
         Choose from:
 
+        - 'incomplete' -> objects that not been completed
+        - 'complete' -> objects that have been completed
         - 'all' -> all objects
-        - 'reviewed-all' -> all objects that have been reviewed
-        - 'unreviewed-all' -> all objects that have not been reviewed
-        - 'reviewed-self' -> objects reviewed by this user
-        - 'reviewed-other' -> objects reviewed by other users
-        - 'assigned-self' -> objects assigned to this user
-        - 'assigned-reviewed' -> objects assigned to self and reviewed
-        - 'assigned-unreviewed' -> objects assigned to self but unreviewed
-        - 'assigned-all' -> all objects assigned to some reviewer
-        - 'unassigned-all' -> all objects not assigned to any reviewers
 
     userid : int
         If set, sets the current userid to use in the filters when review_status
@@ -619,7 +589,6 @@ def get_objects(
     object_catalog = meta.tables['object_catalog']
     object_images = meta.tables['object_images']
     object_comments = meta.tables['object_comments']
-    object_reviewers = meta.tables['object_reviewers']
 
     # add in the random sample if specified
     if random_sample_percent is not None:
@@ -633,8 +602,6 @@ def get_objects(
         object_images
     ).outerjoin(
         object_comments
-    ).outerjoin(
-        object_reviewers
     )
 
     if getinfo == 'all':
@@ -645,7 +612,6 @@ def get_objects(
              object_catalog_sample.c.ra,
              object_catalog_sample.c.dec,
              object_catalog_sample.c.user_flags,
-             object_reviewers.c.userid.label("reviewer_userid"),
              object_catalog_sample.c.extra_columns,
              object_images.c.filepath,
              object_comments.c.added.label("comment_added_on"),
@@ -657,33 +623,11 @@ def get_objects(
             join
         )
 
-    elif getinfo == 'plotcols':
-
-        sel = select(
-            [object_catalog_sample.c.id,
-             object_catalog_sample.c.extra_columns['g-i'],
-             object_catalog_sample.c.extra_columns['g-r'],
-             object_catalog_sample.c.extra_columns['flux_radius_ave_g'],
-             object_catalog_sample.c.extra_columns['mu_ave_g']]
-        ).select_from(object_catalog_sample)
-        fast_fetch = True
-
     elif getinfo == 'objectids':
         sel = select([
             object_catalog_sample.c.id,
             object_catalog_sample.c.objectid
         ]).select_from(join).distinct()
-
-    elif getinfo == 'review-assignments':
-        sel = select(
-            [object_catalog_sample.c.id,
-             object_catalog_sample.c.objectid,
-             func.array_agg(object_reviewers.c.userid).label("reviewer_userid")]
-        ).select_from(join).group_by(
-            object_catalog_sample.c.objectid
-        ).group_by(
-            object_catalog_sample.c.id
-        )
 
     else:
         sel = select([
@@ -692,49 +636,22 @@ def get_objects(
         ]).select_from(join).distinct()
 
     # figure out the where condition
-    if review_status == 'unreviewed-all':
-        actual_sel = sel.where(object_comments.c.added == None)
-    elif review_status == 'reviewed-all':
-        actual_sel = sel.where(object_comments.c.added != None)
-
-    elif review_status == 'reviewed-self' and userid is not None:
-        actual_sel = sel.where(
-            object_comments.c.userid == userid
-        ).where(
-            object_comments.c.added != None
-        )
-    elif review_status == 'reviewed-other' and userid is not None:
-        actual_sel = sel.where(
-            object_comments.c.userid != userid
-        ).where(
-            object_comments.c.added != None
-        )
-    elif review_status == 'assigned-self' and userid is not None:
-        actual_sel = sel.where(
-            object_reviewers.c.userid == userid
-        )
-    elif review_status == 'assigned-reviewed' and userid is not None:
-        actual_sel = sel.where(
-            object_reviewers.c.userid == userid
-        ).where(
-            object_comments.c.added != None
-        )
-    elif review_status == 'assigned-unreviewed' and userid is not None:
-        actual_sel = sel.where(
-            object_reviewers.c.userid == userid
-        ).where(
-            object_comments.c.added == None
-        )
-    elif review_status == 'assigned-all':
-        actual_sel = sel.where(
-            object_reviewers.c.userid != None
-        )
-    elif review_status == 'unassigned-all':
-        actual_sel = sel.where(
-            object_reviewers.c.userid == None
-        )
-    else:
+    if review_status == 'all':
         actual_sel = sel
+    elif review_status == 'incomplete':
+        actual_sel = sel.where(
+            ((object_comments.c.reviewer_1 != userid) &\
+            (object_comments.c.reviewer_2 != userid) &\
+            (object_comments.c.reviewer_3 != userid) &\
+            (object_comments.c.num_votes +\
+            func.abs(object_comments.c.score) < 4)) |\
+            (object_comments.c.added == None)
+        )
+    elif review_status == 'complete':
+        actual_sel = sel.where(
+            (object_comments.c.num_votes +\
+             func.abs(object_comments.c.score)) == 4
+        )
 
     #
     # add in the pagination
@@ -930,6 +847,11 @@ def insert_object_comments(userid,
         objectid = comments['objectid']
         comment_text = comments['comment']
         user_flags = comments['user_flags']
+        score = comments['score']
+        reviewer_list = [comments['reviewer_1'],
+                         comments['reviewer_2'],
+                         comments['reviewer_3']]
+        num_votes = comments['num_votes']
 
         # 1. bleach the comment
         cleaned_comment = bleach.clean(comment_text, strip=True)
@@ -940,18 +862,44 @@ def insert_object_comments(userid,
             output_format='html5',
         )
 
+        plus_one = ['candy', 'galaxy']
+        minus_one = ['junk', 'tidal', 'outskirts', 'cirrus']
+        score_update = 1 * sum([user_flags[col] for col in plus_one])
+        score_update += -1 * sum([user_flags[col] for col in minus_one])
+
+        if userid not in reviewer_list:
+            score = score + score_update
+            num_votes += 1
+        else:
+            score = score - 2 * (score_update < 0) * (score >= 0) 
+
+        reviewers = {}
+        for i in range(3):
+            _r = reviewer_list[i]
+            if (_r == -99) and (_r != userid):
+                reviewers['reviewer_' + str(i+1)] = userid
+                break
+            else:
+                reviewers['reviewer_' + str(i+1)] = _r
+
+        insert_dict = {
+            'objectid':objectid,
+            'added':added,
+            'updated':updated,
+            'userid':userid,
+            'username':username,
+            'user_flags':user_flags,
+            'contents':rendered_comment, 
+            'num_votes':num_votes,
+            'score': score
+        }
+        insert_dict.update(reviewers)
+
         # prepare the insert
         insert = pg.insert(
             object_comments
-        ).values(
-            {'objectid':objectid,
-             'added':added,
-             'updated':updated,
-             'userid':userid,
-             'username':username,
-             'user_flags':user_flags,
-             'contents':rendered_comment}
-        )
+        ).values(insert_dict)
+
         res = conn.execute(insert)
         updated = res.rowcount
         res.close()
@@ -1057,6 +1005,7 @@ def update_object_flags(objectid,
     return objectinfo
 
 
+"""
 #######################
 ## ASSIGNING OBJECTS ##
 #######################
@@ -1257,3 +1206,5 @@ def update_review_assignments_from_file(
         conn.close()
         meta.bind = None
         engine.dispose()
+
+"""

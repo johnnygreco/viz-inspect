@@ -193,10 +193,10 @@ def worker_get_object(
         ]
 
         # make a list of the reviewers' user IDs
-        reviewer_userid = list(
-            set([x['reviewer_userid'] for x in objectinfo
-                 if x['reviewer_userid'] is not None])
-        )
+        #reviewer_userid = list(
+        #    set([x['reviewer_userid'] for x in objectinfo
+        #         if x['reviewer_userid'] is not None])
+        #)
 
         comments = sorted(
             comments,
@@ -213,7 +213,7 @@ def worker_get_object(
         del objectinfo_dict['comment_by_username']
         del objectinfo_dict['comment_userset_flags']
         del objectinfo_dict['comment_text']
-        objectinfo_dict['reviewer_userid'] = reviewer_userid
+        #objectinfo_dict['reviewer_userid'] = reviewer_userid
 
         objectinfo_dict['filepath'] = 'redacted'
 
@@ -227,16 +227,16 @@ def worker_get_object(
         #)
 
         # set the readonly flag
-        if (len(objectinfo_dict['reviewer_userid']) > 0 and
-            userid in objectinfo_dict['reviewer_userid']):
-            readonly = False
-        elif (len(objectinfo_dict['reviewer_userid']) > 0 and
-              userid not in objectinfo_dict['reviewer_userid']):
-            readonly = True
-        elif (len(objectinfo_dict['reviewer_userid']) == 0):
-            readonly = False
-        else:
-            readonly = True
+        #if (len(objectinfo_dict['reviewer_userid']) > 0 and
+        #    userid in objectinfo_dict['reviewer_userid']):
+        #    readonly = False
+        #elif (len(objectinfo_dict['reviewer_userid']) > 0 and
+        #      userid not in objectinfo_dict['reviewer_userid']):
+        #    readonly = True
+        #elif (len(objectinfo_dict['reviewer_userid']) == 0):
+        #    readonly = False
+        #else:
+        readonly = False
 
         # this is the dict we return
         retdict = {
@@ -609,13 +609,8 @@ class ObjectListHandler(BaseHandler):
             Sets the type of list retrieval:
 
             - 'all' -> all objects
-            - 'reviewed-self' -> objects reviewed by this user
-            - 'reviewed-other' -> objects reviewed by other users
-            - 'assigned-self' -> objects assigned to this user
-            - 'assigned-reviewed' -> objects assigned to self and reviewed
-            - 'assigned-unreviewed' -> objects assigned to self but unreviewed
-            - 'assigned-all' -> all objects assigned to some reviewer
-            - 'unassigned-all' -> all objects not assigned to any reviewers
+            - 'incomplete' -> objects you haven't voted on that need a vote
+            - 'complete' -> all completed objects 
 
             For -self retrieval types, we'll get the userid out of the session
             dict.
@@ -653,11 +648,8 @@ class ObjectListHandler(BaseHandler):
             )
 
             if review_status not in ('all',
-                                     'assigned-self',
-                                     'assigned-reviewed',
-                                     'assigned-unreviewed',
-                                     'reviewed-self',
-                                     'reviewed-other'):
+                                     'incomplete',
+                                     'complete'):
                 raise ValueError("Unknown review status requested: '%s'" %
                                  review_status)
 
@@ -945,7 +937,12 @@ class SaveObjectHandler(BaseHandler):
 
             objectid = int(xhtml_escape(objectid))
             comment_text = self.get_argument('comment_text',None)
-            user_flags = self.get_argument('user_flags',None)
+            user_flags = self.get_argument('user_flags', None)
+            reviewer_1 = self.get_argument('reviewer_1', -99)
+            reviewer_2 = self.get_argument('reviewer_2', -99)
+            reviewer_3 = self.get_argument('reviewer_3', -99)
+            score = self.get_argument('score', 0)
+            num_votes = self.get_argument('num_votes', 0)
             userid = self.current_user['user_id']
             username = self.current_user['full_name']
 
@@ -964,11 +961,16 @@ class SaveObjectHandler(BaseHandler):
 
                 # if this object actually exists and is writable, we can do
                 # stuff on it
-                if objectinfo is not None and not objectinfo['readonly']:
+                if objectinfo is not None:# and not objectinfo['readonly']:
 
                     commentdict = {'objectid':objectid,
                                    'comment':comment_text,
-                                   'user_flags':json.loads(user_flags)}
+                                   'user_flags':json.loads(user_flags),
+                                   'score':score, 
+                                   'num_votes':num_votes, 
+                                   'reviewer_1':reviewer_1,
+                                   'reviewer_2':reviewer_2,
+                                   'reviewer_3':reviewer_3}
 
                     updated = yield self.executor.submit(
                         worker_insert_object_comments,

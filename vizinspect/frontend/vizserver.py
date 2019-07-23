@@ -170,7 +170,7 @@ define('imagedir',
        type=str)
 
 define('flagkeys',
-       default='candy,junk,tidal,cirrus',
+       default='candy,galaxy,outskirts,tidal,cirrus,junk',
        help=("This tells the server what object flags to use for the catalog."),
        type=str)
 
@@ -761,16 +761,16 @@ def main():
         ##########################
 
         # this handles review assignments
-        (r'/api/review-assign',
-         actions.ReviewAssignmentHandler,
-         {'fernetkey':FERNETSECRET,
-          'executor':EXECUTOR,
-          'authnzerver':AUTHNZERVER,
-          'basedir':BASEDIR,
-          'session_expiry':SESSION_EXPIRY,
-          'siteinfo':SITEINFO,
-          'ratelimit':RATELIMIT,
-          'cachedir':CACHEDIR}),
+        #(r'/api/review-assign',
+        # actions.ReviewAssignmentHandler,
+        # {'fernetkey':FERNETSECRET,
+        #  'executor':EXECUTOR,
+        #  'authnzerver':AUTHNZERVER,
+        #  'basedir':BASEDIR,
+        #  'session_expiry':SESSION_EXPIRY,
+        #  'siteinfo':SITEINFO,
+        #  'ratelimit':RATELIMIT,
+        #  'cachedir':CACHEDIR}),
 
         (r'/api/list-objects',
          actions.ObjectListHandler,

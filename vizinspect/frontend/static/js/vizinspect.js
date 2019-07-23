@@ -399,91 +399,7 @@ var ui = {
 
       let selected = $(this).val();
 
-      if (selected === 'reviewed-all') {
-        ui.debounce(
-          review.get_object_list(
-            'reviewed-all',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
-      else if (selected === 'unreviewed-all') {
-        ui.debounce(
-          review.get_object_list(
-            'unreviewed-all',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
-      else if (selected === 'reviewed-self') {
-        ui.debounce(
-          review.get_object_list(
-            'reviewed-self',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
-      else if (selected === 'reviewed-other') {
-        ui.debounce(
-          review.get_object_list(
-            'reviewed-other',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
-      else if (selected === 'assigned-self') {
-        ui.debounce(
-          review.get_object_list(
-            'assigned-self',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
-      else if (selected === 'assigned-reviewed') {
-        ui.debounce(
-          review.get_object_list(
-            'assigned-reviewed',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
-      else if (selected === 'assigned-unreviewed') {
-        ui.debounce(
-          review.get_object_list(
-            'assigned-unreviewed',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
-      else {
+      if (selected === 'all') {
         ui.debounce(
           review.get_object_list(
             'all',
@@ -495,7 +411,30 @@ var ui = {
           100
         );
       }
-
+      else if (selected === 'incomplete') {
+        ui.debounce(
+          review.get_object_list(
+            'incomplete',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
+      }
+      else if (selected === 'complete') {
+        ui.debounce(
+          review.get_object_list(
+            'complete',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
+      }
     });
 
 
@@ -670,20 +609,14 @@ var review = {
       // update the object list type
       let index_label = 'Current object (browsing all objects)';
 
-      if (review_status === 'reviewed-self') {
-        index_label = 'Current object (in objects reviewed by me)';
+      if (review_status === 'all') {
+        index_label = 'All objects in hugs catalog';
       }
-      else if (review_status === 'reviewed-other') {
-        index_label = 'Current object (in objects reviewed by others)';
+      else if (review_status === 'incomplete') {
+        index_label = 'Objects I have not voted on that still need votes';
       }
-      else if (review_status === 'assigned-self') {
-        index_label = 'Current object (in my assigned objects)';
-      }
-      else if (review_status === 'assigned-reviewed') {
-        index_label = 'Current object (in my assigned-reviewed objects)';
-      }
-      else if (review_status === 'assigned-unreviewed') {
-        index_label = 'Current object (in my assigned-unreviewed objects)';
+      else if (review_status === 'complete') {
+        index_label = 'Completed objects';
       }
       $('#current-index-label').html(index_label);
 
@@ -844,14 +777,14 @@ ${item}
             $('#flag-button-group-1').append(thisrow);
          }
 
-          for (let item of ['tidal', 'halo', 'cirrus']) {
+          for (let item of ['tidal', 'outskirts', 'cirrus']) {
 
             let color = 'info';
 
             if (item == 'tidal') {
               color = 'secondary';
             }
-            else if (item == 'halo') {
+            else if (item == 'outskirts') {
               color = 'warning';
             }
             else if (item == 'cirrus') {
