@@ -870,11 +870,11 @@ def insert_object_comments(userid,
         # now update the counts for the object_flags
         #
         sel = select([object_catalog.c.user_flags]).where(
-            object_catalog.c_objectid == objectid
+            object_catalog.c.objectid == objectid
         ).select_from(object_catalog)
 
         res = conn.execute(sel)
-        flag_counts = res.first()
+        flag_counts = res.scalar()
 
         for k in user_flags:
             if user_flags[k] is True:

@@ -456,7 +456,7 @@ var ui = {
       if (review.current_page < review.current_npages) {
         ui.debounce(
           review.get_object_list(
-            review.current_reviewstatus,
+            review.current_list_reviewstatus,
             'start',
             review.objectlist_end_keyid,
             'first',
@@ -474,7 +474,7 @@ var ui = {
       if (review.current_page > 0) {
         ui.debounce(
           review.get_object_list(
-            review.current_reviewstatus,
+            review.current_list_reviewstatus,
             'end',
             review.objectlist_start_keyid,
             'last',

@@ -578,9 +578,11 @@ class ObjectListHandler(BaseHandler):
 
                 objectlist_info = yield self.executor.submit(
                     worker_get_objects,
-                    self.siteinfo['good_flag_keys'],
+                    [x.strip() for x in
+                     self.siteinfo['good_flag_keys'].split(',')],
                     self.siteinfo['max_good_votes'],
-                    self.siteinfo['bad_flag_keys'],
+                    [x.strip() for x in
+                     self.siteinfo['bad_flag_keys'].split(',')],
                     self.siteinfo['max_bad_votes'],
                     review_status=review_status,
                     start_keyid=keyid,
@@ -592,9 +594,11 @@ class ObjectListHandler(BaseHandler):
 
                 objectlist_info = yield self.executor.submit(
                     worker_get_objects,
-                    self.siteinfo['good_flag_keys'],
+                    [x.strip() for x in
+                     self.siteinfo['good_flag_keys'].split(',')],
                     self.siteinfo['max_good_votes'],
-                    self.siteinfo['bad_flag_keys'],
+                    [x.strip() for x in
+                     self.siteinfo['bad_flag_keys'].split(',')],
                     self.siteinfo['max_bad_votes'],
                     review_status=review_status,
                     start_keyid=None,
@@ -606,9 +610,11 @@ class ObjectListHandler(BaseHandler):
 
                 objectlist_info = yield self.executor.submit(
                     worker_get_objects,
-                    self.siteinfo['good_flag_keys'],
+                    [x.strip() for x in
+                     self.siteinfo['good_flag_keys'].split(',')],
                     self.siteinfo['max_good_votes'],
-                    self.siteinfo['bad_flag_keys'],
+                    [x.strip() for x in
+                     self.siteinfo['bad_flag_keys'].split(',')],
                     self.siteinfo['max_bad_votes'],
                     review_status=review_status,
                     start_keyid=keyid,
@@ -725,9 +731,11 @@ class LoadObjectHandler(BaseHandler):
                 worker_get_object,
                 objindex,
                 self.basedir,
-                self.siteinfo['good_flag_keys'],
+                [x.strip() for x in
+                 self.siteinfo['good_flag_keys'].split(',')],
                 self.siteinfo['max_good_votes'],
-                self.siteinfo['bad_flag_keys'],
+                [x.strip() for x in
+                 self.siteinfo['bad_flag_keys'].split(',')],
                 self.siteinfo['max_bad_votes'],
             )
 
@@ -853,9 +861,11 @@ class SaveObjectHandler(BaseHandler):
                     worker_get_object,
                     objectid,
                     self.basedir,
-                    self.siteinfo['good_flag_keys'],
+                    [x.strip() for x in
+                     self.siteinfo['good_flag_keys'].split(',')],
                     self.siteinfo['max_good_votes'],
-                    self.siteinfo['bad_flag_keys'],
+                    [x.strip() for x in
+                     self.siteinfo['bad_flag_keys'].split(',')],
                     self.siteinfo['max_bad_votes'],
                 )
 

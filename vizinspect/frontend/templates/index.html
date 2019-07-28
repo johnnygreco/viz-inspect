@@ -31,12 +31,12 @@
 
       <!-- Legacy Survey and hscMap controls -->
       <div class="row">
-        <div class="col-6 text-center" >
+        <div class="col-6 text-right" >
           <a target="_blank" rel="noopener noreferrer" id="legacy-at-loc" href="#" >
             Legacy Surveys
           </a>
         </div>
-        <div class="col-6 text-center" >
+        <div class="col-6 text-left" >
           <a target="_blank" rel="noopener noreferrer" id="hsc-map-at-loc" href="#" >
             hscMap
           </a>
@@ -243,11 +243,9 @@
             <div class="form-group">
               <select class="custom-select" id="objectlist-pref-select">
                 <option value="all">All objects</option>
-                <option value="assigned-self">Objects assigned for my review</option>
-                <option value="assigned-unreviewed">Assigned but unreviewed objects</option>
-                <option value="assigned-reviewed">Assigned and reviewed objects</option>
-                <option value="reviewed-self">Objects reviewed by me</option>
-                <option value="reviewed-other">Objects reviewed by others</option>
+                <option value="incomplete">Objects still under review</option>
+                <option value="complete-good">Objects with sufficient 'good' votes</option>
+                <option value="complete-bad">Objects with sufficient 'bad' votes</option>
               </select>
             </div>
           </form>
