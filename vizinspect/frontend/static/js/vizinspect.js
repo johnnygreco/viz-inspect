@@ -752,7 +752,8 @@ var review = {
           $('#flag-button-group-1').html(
             '<div class="row"><div class="col-12">' +
               'Voting on this object is closed because ' +
-              'its review has been completed.' +
+              'its review has been completed. Its final status was set to: ' +
+              review.current_object_reviewstatus +
               '</div></div>'
           );
         }

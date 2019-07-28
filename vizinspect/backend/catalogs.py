@@ -526,6 +526,7 @@ def get_objects(
             object_comments.c.contents.label("comment_text"),
             object_comments.c.user_flags.label("comment_userset_flags"),
             object_catalog_sample.c.user_flags,
+            object_catalog_sample.c.review_status
         ]).select_from(
             join
         )
@@ -534,14 +535,31 @@ def get_objects(
         sel = select([
             object_catalog_sample.c.id,
             object_catalog_sample.c.objectid,
-            object_catalog_sample.c.user_flags,
-        ]).select_from(object_catalog_sample)
+        ]).select_from(join).distinct()
 
     #
     # get the actual selection on the review_status kwarg
     #
 
-    actual_sel = sel
+    if review_status == 'complete-good':
+        actual_sel = sel.where(
+            object_catalog_sample.c.review_status == 'complete-good'
+        )
+    elif review_status == 'complete-bad':
+        actual_sel = sel.where(
+            object_catalog_sample.c.review_status == 'complete-bad'
+        )
+    elif review_status == 'incomplete':
+        actual_sel = sel.where(
+            object_catalog_sample.c.review_status == 'incomplete'
+        )
+    else:
+        actual_sel = sel
+
+    if only_for_userid is not None:
+        actual_sel = actual_sel.where(
+            object_reviewers.c.userid == only_for_userid
+        )
 
     #
     # add in the pagination
@@ -635,79 +653,7 @@ def get_objects(
         meta.bind = None
         engine.dispose()
 
-    #
-    # now filter on the review conditions
-    #
-    actual_rows = []
-
-    if review_status == 'complete-good':
-        for row in rows:
-            if fast_fetch:
-                check_item = row[-1]
-            else:
-                check_item = row['user_flags']
-
-            bad_flag_sum = sum(check_item[k] for k in bad_flags)
-            good_flag_sum = sum(check_item[k] for k in good_flags)
-            if good_flag_sum >= max_good_votes and bad_flag_sum < max_bad_votes:
-                actual_rows.append(row)
-
-    elif review_status == 'complete-bad':
-        for row in rows:
-            if fast_fetch:
-                check_item = row[-1]
-            else:
-                check_item = row['user_flags']
-
-            good_flag_sum = sum(check_item[k] for k in good_flags)
-            bad_flag_sum = sum(check_item[k] for k in bad_flags)
-            if bad_flag_sum >= max_bad_votes and good_flag_sum < max_good_votes:
-                actual_rows.append(row)
-
-    elif review_status == 'incomplete':
-        for row in rows:
-            if fast_fetch:
-                check_item = row[-1]
-            else:
-                check_item = row['user_flags']
-
-            bad_flag_sum = sum(check_item[k] for k in bad_flags)
-            good_flag_sum = sum(check_item[k] for k in good_flags)
-
-            if bad_flag_sum < max_bad_votes and good_flag_sum < max_good_votes:
-                actual_rows.append(row)
-
-    else:
-        actual_rows = rows
-
-    # fix the start and end keyids
-    if fast_fetch:
-        if len(actual_rows) > 0:
-            if not revorder:
-                ret_start_keyid = actual_rows[0][0]
-                ret_end_keyid = actual_rows[-1][0]
-            else:
-                ret_start_keyid = actual_rows[-1][0]
-                ret_end_keyid = actual_rows[0][0]
-
-        else:
-            ret_start_keyid = 1
-            ret_end_keyid = 1
-
-    else:
-        if len(actual_rows) > 0:
-            if not revorder:
-                ret_start_keyid = actual_rows[0]['keyid']
-                ret_end_keyid = actual_rows[-1]['keyid']
-            else:
-                ret_start_keyid = actual_rows[-1]['keyid']
-                ret_end_keyid = actual_rows[0]['keyid']
-
-        else:
-            ret_start_keyid = 1
-            ret_end_keyid = 1
-
-    return actual_rows, ret_start_keyid, ret_end_keyid, revorder
+    return rows, ret_start_keyid, ret_end_keyid, revorder
 
 
 def get_object_count(

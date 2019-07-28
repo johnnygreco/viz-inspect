@@ -50,6 +50,7 @@ Catalog = Table(
     Column('user_flags', postgresql.JSONB),
     Column('reviewer_userid', Integer, index=True),
     Column('extra_columns', postgresql.JSONB),
+    Column('review_status', Text, index=True, default='incomplete'),
 )
 
 Catalog = Table(
