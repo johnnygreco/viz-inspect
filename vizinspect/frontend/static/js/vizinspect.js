@@ -399,10 +399,10 @@ var ui = {
 
       let selected = $(this).val();
 
-      if (selected === 'reviewed-all') {
+      if (selected === 'complete-good') {
         ui.debounce(
           review.get_object_list(
-            'reviewed-all',
+            'complete-good',
             'start',
             1,
             'first',
@@ -411,10 +411,10 @@ var ui = {
           100
         );
       }
-      else if (selected === 'unreviewed-all') {
+      else if (selected === 'complete-bad') {
         ui.debounce(
           review.get_object_list(
-            'unreviewed-all',
+            'complete-bad',
             'start',
             1,
             'first',
@@ -423,58 +423,10 @@ var ui = {
           100
         );
       }
-      else if (selected === 'reviewed-self') {
+      else if (selected === 'incomplete') {
         ui.debounce(
           review.get_object_list(
-            'reviewed-self',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
-      else if (selected === 'reviewed-other') {
-        ui.debounce(
-          review.get_object_list(
-            'reviewed-other',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
-      else if (selected === 'assigned-self') {
-        ui.debounce(
-          review.get_object_list(
-            'assigned-self',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
-      else if (selected === 'assigned-reviewed') {
-        ui.debounce(
-          review.get_object_list(
-            'assigned-reviewed',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
-      else if (selected === 'assigned-unreviewed') {
-        ui.debounce(
-          review.get_object_list(
-            'assigned-unreviewed',
+            'incomplete',
             'start',
             1,
             'first',
@@ -583,7 +535,7 @@ var review = {
 
   current_objectid: null,
   current_keyid: null,
-  current_readonly: null,
+  current_object_reviewstatus: null,
 
 
   objectlist: null,
@@ -594,7 +546,7 @@ var review = {
   current_objectcount: null,
   current_npages: null,
   current_rows_per_page: null,
-  current_reviewstatus: null,
+  current_list_reviewstatus: null,
 
   // this fetches the full object list. if load_object is true, will load
   // the appropriate object in the list right after fetching the list
@@ -621,7 +573,7 @@ var review = {
         review.current_objectcount = result.object_count;
         review.current_npages = result.n_pages;
         review.current_rows_per_page = result.rows_per_page;
-        review.current_reviewstatus = review_status;
+        review.current_list_reviewstatus = review_status;
 
         // special case of first load
         if (review_status == 'all' && keytype == 'start' && keyid == 1) {
@@ -670,20 +622,14 @@ var review = {
       // update the object list type
       let index_label = 'Current object (browsing all objects)';
 
-      if (review_status === 'reviewed-self') {
-        index_label = 'Current object (in objects reviewed by me)';
+      if (review_status === 'complete-good') {
+        index_label = 'Current object (in completely reviewed good objects)';
       }
-      else if (review_status === 'reviewed-other') {
-        index_label = 'Current object (in objects reviewed by others)';
+      else if (review_status === 'complete-bad') {
+        index_label = 'Current object (in completely reviewed bad objects)';
       }
-      else if (review_status === 'assigned-self') {
-        index_label = 'Current object (in my assigned objects)';
-      }
-      else if (review_status === 'assigned-reviewed') {
-        index_label = 'Current object (in my assigned-reviewed objects)';
-      }
-      else if (review_status === 'assigned-unreviewed') {
-        index_label = 'Current object (in my assigned-unreviewed objects)';
+      else if (review_status === 'incomplete') {
+        index_label = 'Current object (in objects with incomplete reviews)';
       }
       $('#current-index-label').html(index_label);
 
@@ -727,17 +673,20 @@ var review = {
 
         let objectinfo = result.info;
         let comments = result.comments;
-        let readonly = result.readonly;
-        let objectplot = result.plot;
+        let object_review_status = result.review_status;
 
         // update the status
         review.current_objectid = objectinfo.objectid;
         review.current_keyid = objectinfo.keyid;
-        review.current_readonly = readonly;
+        review.current_object_reviewstatus = object_review_status;
 
-        // update the plot
-        //$('#galaxy-main-plot').attr('src','/viz-inspect-data/' + objectplot);
-        $('#galaxy-main-plot').attr('src','https://hugs.johnnygreco.space/hugs-' + objectinfo.objectid + '.png');
+        // update the plot. this gets it straight from the CDN (probably,
+        // explains why it's fast now)
+        $('#galaxy-main-plot').attr(
+          'src',
+          'https://hugs.johnnygreco.space/hugs-' +
+            objectinfo.objectid + '.png'
+        );
         $('#galaxy-main-plot').attr('data-sourceindex', objectinfo.objectid);
         $('#galaxy-main-plot').attr('data-ra', objectinfo.ra);
         $('#galaxy-main-plot').attr('data-dec', objectinfo.dec);
@@ -756,9 +705,8 @@ var review = {
         );
 
         // update the hscMap URL
-          
-        var src_ra = objectinfo.ra * Math.PI / 180.0
-        var src_dec = objectinfo.dec * Math.PI / 180.0
+        var src_ra = objectinfo.ra * Math.PI / 180.0;
+        var src_dec = objectinfo.dec * Math.PI / 180.0;
 
         $('#hsc-map-at-loc').attr(
           'href',
@@ -799,17 +747,19 @@ var review = {
         $('#flag-button-group-1').empty();
         $('#flag-button-group-2').empty();
 
-        if (review.current_readonly) {
+        if (review.current_object_reviewstatus != 'incomplete') {
 
           $('#flag-button-group-1').html(
             '<div class="row"><div class="col-12">' +
-              'This object is assigned to another user for review.' +
+              'Voting on this object is closed because ' +
+              'its review has been completed.' +
               '</div></div>'
           );
         }
 
         else {
 
+          // fill in group 1
           for (let item of ['candy', 'galaxy', 'junk']) {
 
             let color = 'info';
@@ -842,8 +792,9 @@ ${item}
 </button>`;
 
             $('#flag-button-group-1').append(thisrow);
-         }
+          }
 
+          // fill in group 2
           for (let item of ['tidal', 'halo', 'cirrus']) {
 
             let color = 'info';
@@ -883,7 +834,7 @@ ${item}
 
         // handle the object comments and the submit button in case they're
         // readonly
-        if (review.current_readonly) {
+        if (review.current_object_reviewstatus != 'incomplete') {
           $('#object-notes').prop('disabled',true);
           $('#save-current-object').prop('disabled',true);
         }
@@ -935,14 +886,12 @@ ${item}
                 </div>
 
               </div>
-            </div>
-`;
+            </div>`;
             $('.all-object-comments').append(comment_box);
 
           }
 
         }
-
 
       }
 
@@ -984,7 +933,7 @@ ${item}
 
       // load the next objectlist and the first element there
       review.get_object_list(
-        review.current_reviewstatus,
+        review.current_list_reviewstatus,
         'start',
         review.objectlist_end_keyid,
         'first',
@@ -1016,7 +965,7 @@ ${item}
 
       // load the prev objectlist and the last element there
       review.get_object_list(
-        review.current_reviewstatus,
+        review.current_list_reviewstatus,
         'end',
         review.objectlist_start_keyid,
         'last',
