@@ -551,7 +551,7 @@ def main():
         LOGGER.info("To save local disk space, "
                     "older generated plots and downloaded "
                     "remote images will be periodically deleted.")
-        default_retention_days = 7
+        default_retention_days = 15
         retention_days = input(
             "How long should these be kept on disk? [in days, default: %s]: " %
             default_retention_days
@@ -656,7 +656,6 @@ def main():
 
         LOGGER.info("First run setup for vizserver complete.")
 
-
     #
     # now, get site specific info
     #
@@ -686,7 +685,6 @@ def main():
     else:
         LOGGER.warning('Site info: no email server is set up.')
         SITEINFO['email_server'] = None
-
 
     # get the user login settings
     if SITEINFO['email_server'] is None:
@@ -730,7 +728,6 @@ def main():
                        'settings key "signups_allowed" not found, '
                        'disabling user signups.')
 
-
     #
     # authentication server options
     #
@@ -758,7 +755,6 @@ def main():
         import requests
         requests.get('http://captive.apple.com/hotspot-detect.html')
 
-
     ####################################
     ## PERSISTENT BACKGROUND EXECUTOR ##
     ####################################
@@ -770,7 +766,6 @@ def main():
                             initializer=setup_worker,
                             initargs=(SITEINFO,),
                             finalizer=close_database)
-
 
     ##################
     ## URL HANDLERS ##
@@ -1010,7 +1005,6 @@ def main():
 
     ]
 
-
     ########################
     ## APPLICATION SET UP ##
     ########################
@@ -1041,7 +1035,6 @@ def main():
     # X-Forwarded-For support so we can see the remote IP in the logs
     http_server = tornado.httpserver.HTTPServer(app, xheaders=True)
 
-
     ######################
     ## start the server ##
     ######################
@@ -1056,7 +1049,7 @@ def main():
         try:
             http_server.listen(serverport, options.serve)
             portok = True
-        except socket.error as e:
+        except socket.error:
             LOGGER.warning('%s:%s is already in use, trying port %s' %
                            (options.serve, serverport, serverport + 1))
             serverport = serverport + 1
@@ -1110,6 +1103,7 @@ def main():
 
     EXECUTOR.shutdown()
     time.sleep(2)
+
 
 # run the server
 if __name__ == '__main__':

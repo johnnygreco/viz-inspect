@@ -51,6 +51,7 @@ class FrontendEncoder(json.JSONEncoder):
         else:
             return json.JSONEncoder.default(self, obj)
 
+
 # this replaces the default encoder and makes it so Tornado will do the right
 # thing when it converts dicts to JSON when a
 # tornado.web.RequestHandler.write(dict) is called.
@@ -62,7 +63,6 @@ json._default_encoder = FrontendEncoder()
 
 # get a logger
 LOGGER = logging.getLogger(__name__)
-
 
 
 #####################
@@ -137,7 +137,7 @@ def worker_make_plot(
 
         return objectplot
 
-    except Exception as e:
+    except Exception:
         LOGGER.exception("Could not get info for object: %s" % objectid)
         if raiseonfail:
             raise
