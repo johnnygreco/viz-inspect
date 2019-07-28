@@ -44,7 +44,7 @@ try:
     from datetime import datetime, timezone, timedelta
     utc = timezone.utc
 
-except Exception as e:
+except Exception:
 
     from datetime import datetime, timedelta, tzinfo
     ZERO = timedelta(0)
@@ -63,7 +63,7 @@ except Exception as e:
 
     utc = UTC()
 
-from sqlalchemy import select, update, func, distinct
+from sqlalchemy import select, update, func
 from sqlalchemy.dialects import postgresql as pg
 
 import markdown
@@ -78,13 +78,16 @@ from .database import get_postgres_db, json_dumps
 ## LOADING THE CATALOG ##
 #########################
 
+DEFAULT_FLAGS = ('candy','galaxy', 'outskirts', 'junk', 'tidal', 'cirrus')
+
+
 def load_catalog(catalog_fpath,
                  images_dpath,
                  dbinfo,
                  overwrite=False,
                  dbkwargs=None,
                  object_imagefile_pattern='hugs-{objectid}.png',
-                 flags_to_use=('candy','junk','tidal','cirrus'),
+                 flags_to_use=DEFAULT_FLAGS,
                  **pdkwargs):
     '''This loads the catalog into the vizinspect database object_catalog table.
 
@@ -185,11 +188,12 @@ def load_catalog(catalog_fpath,
         x['added'] = now
         x['updated'] = now
         x['objectid'] = y['viz-id']
-        x['user_flags'] = {x: False for x in flags_to_use}
+
+        # this column now contains a JSON which tracks vote counts per flag
+        x['user_flags'] = {x: 0 for x in flags_to_use}
 
     # get the table
     object_catalog = meta.tables['object_catalog']
-
 
     # execute the inserts
     with conn.begin():
@@ -252,7 +256,6 @@ def load_catalog(catalog_fpath,
                 for x in object_images
             ]
 
-
         # generate the object insertion rows
         image_cols = [
             {'objectid':x,
@@ -285,7 +288,6 @@ def load_catalog(catalog_fpath,
 
             conn.execute(insert)
 
-
     # close everything down if we were passed a database URL only and had to
     # make a new engine
     if engine:
@@ -301,110 +303,6 @@ def load_catalog(catalog_fpath,
 ########################################
 ## GETTING OBJECTS OUT OF THE CATALOG ##
 ########################################
-
-def get_object_count(
-        dbinfo,
-        review_status='all',
-        userid=None,
-        dbkwargs=None
-):
-    '''
-    This counts all objects in the database.
-
-    '''
-
-    #
-    # get the database
-    #
-    dbref, dbmeta = dbinfo
-    if not dbkwargs:
-        dbkwargs = {}
-    if isinstance(dbref, str) and 'postgres' in dbref:
-        if not dbkwargs:
-            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
-        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
-            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
-        elif dbkwargs and 'engine_kwargs' in dbkwargs:
-            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
-        engine, conn, meta = get_postgres_db(dbref,
-                                             dbmeta,
-                                             **dbkwargs)
-    elif isinstance(dbref, str) and 'postgres' not in dbref:
-        raise NotImplementedError(
-            "PIPE-TrEx currently doesn't support non-Postgres databases."
-        )
-    else:
-        engine, conn, meta = None, dbref, dbmeta
-        meta.bind = conn
-    #
-    # end of database get
-    #
-
-    # prepare the select
-    object_catalog = meta.tables['object_catalog']
-    object_comments = meta.tables['object_comments']
-    object_reviewers = meta.tables['object_reviewers']
-
-    join = object_catalog.outerjoin(object_comments).outerjoin(object_reviewers)
-
-    sel = select(
-        [func.count(distinct(object_catalog.c.id))]
-    ).select_from(join)
-
-    # figure out the where condition
-    if review_status == 'reviewed-self' and userid is not None:
-        actual_sel = sel.where(
-            object_comments.c.userid == userid
-        ).where(
-            object_comments.c.added != None
-        )
-    elif review_status == 'reviewed-other' and userid is not None:
-        actual_sel = sel.where(
-            object_comments.c.userid != userid
-        ).where(
-            object_comments.c.added != None
-        )
-    elif review_status == 'assigned-self' and userid is not None:
-        actual_sel = sel.where(
-            object_reviewers.c.userid == userid
-        )
-    elif review_status == 'assigned-reviewed' and userid is not None:
-        actual_sel = sel.where(
-            object_reviewers.c.userid == userid
-        ).where(
-            object_comments.c.added != None
-        )
-    elif review_status == 'assigned-unreviewed' and userid is not None:
-        actual_sel = sel.where(
-            object_reviewers.c.userid == userid
-        ).where(
-            object_comments.c.added == None
-        )
-    elif review_status == 'assigned-all':
-        actual_sel = sel.where(
-            object_reviewers.c.userid != None
-        )
-    elif review_status == 'unassigned-all':
-        actual_sel = sel.where(
-            object_reviewers.c.userid == None
-        )
-    else:
-        actual_sel = sel
-
-    with conn.begin():
-        res = conn.execute(actual_sel)
-        count = res.scalar()
-
-    # close everything down if we were passed a database URL only and had to
-    # make a new engine
-    if engine:
-        conn.close()
-        meta.bind = None
-        engine.dispose()
-
-    return count
-
-
 
 def get_object(objectid,
                dbinfo,
@@ -467,15 +365,11 @@ def get_object(objectid,
 
     # prepare the select
     object_catalog = meta.tables['object_catalog']
-    object_images = meta.tables['object_images']
     object_comments = meta.tables['object_comments']
-    object_reviewers = meta.tables['object_reviewers']
 
-    join = object_catalog.join(
-        object_images
-    ).outerjoin(
+    join = object_catalog.outerjoin(
         object_comments
-    ).outerjoin(object_reviewers)
+    )
 
     sel = select(
         [object_catalog.c.id.label('keyid'),
@@ -483,9 +377,7 @@ def get_object(objectid,
          object_catalog.c.ra,
          object_catalog.c.dec,
          object_catalog.c.user_flags,
-         object_reviewers.c.userid.label("reviewer_userid"),
          object_catalog.c.extra_columns,
-         object_images.c.filepath,
          object_comments.c.added.label("comment_added_on"),
          object_comments.c.userid.label("comment_by_userid"),
          object_comments.c.username.label("comment_by_username"),
@@ -514,11 +406,13 @@ def get_object(objectid,
     return rows
 
 
-
 def get_objects(
         dbinfo,
+        good_flags,
+        max_good_votes,
+        bad_flags,
+        max_bad_votes,
         review_status='all',
-        userid=None,
         start_keyid=1,
         end_keyid=None,
         max_objects=50,
@@ -548,25 +442,14 @@ def get_objects(
         Choose from:
 
         - 'all' -> all objects
-        - 'reviewed-all' -> all objects that have been reviewed
-        - 'unreviewed-all' -> all objects that have not been reviewed
-        - 'reviewed-self' -> objects reviewed by this user
-        - 'reviewed-other' -> objects reviewed by other users
-        - 'assigned-self' -> objects assigned to this user
-        - 'assigned-reviewed' -> objects assigned to self and reviewed
-        - 'assigned-unreviewed' -> objects assigned to self but unreviewed
-        - 'assigned-all' -> all objects assigned to some reviewer
-        - 'unassigned-all' -> all objects not assigned to any reviewers
+        - 'complete' -> objects that have at last 2 good/bad votes
+        - 'complete-good' -> objects that have at least 2 'good' votes
+        - 'complete-bad' -> objects that have at least 2 'bad' votes
+        - 'incomplete' -> objects that don't have at least 2 votes either way
 
-    userid : int
-        If set, sets the current userid to use in the filters when review_status
-        is one of the -self, -other values.
-
-    getinfo: {'objectids','review-assignments','all', 'plotcols'}
+    getinfo: {'objectids','all'}
         If 'objectids', returns only the objectids matching the specified
-        criteria. If 'review-assignments', returns the objectids and a list of
-        userids assigned to review each object. If 'all', returns all info per
-        object.
+        criteria. If 'all', returns all info per object.
 
     dbkwargs : dict or None
         A dict of kwargs to pass to the database open function.
@@ -617,9 +500,7 @@ def get_objects(
 
     # prepare the select
     object_catalog = meta.tables['object_catalog']
-    object_images = meta.tables['object_images']
     object_comments = meta.tables['object_comments']
-    object_reviewers = meta.tables['object_reviewers']
 
     # add in the random sample if specified
     if random_sample_percent is not None:
@@ -629,112 +510,38 @@ def get_objects(
     else:
         object_catalog_sample = object_catalog
 
-    join = object_catalog_sample.join(
-        object_images
-    ).outerjoin(
-        object_comments
-    ).outerjoin(
-        object_reviewers
-    )
+    join = object_catalog_sample.outerjoin(object_comments)
 
     if getinfo == 'all':
 
-        sel = select(
-            [object_catalog_sample.c.id.label('keyid'),
-             object_catalog_sample.c.objectid,
-             object_catalog_sample.c.ra,
-             object_catalog_sample.c.dec,
-             object_catalog_sample.c.user_flags,
-             object_reviewers.c.userid.label("reviewer_userid"),
-             object_catalog_sample.c.extra_columns,
-             object_images.c.filepath,
-             object_comments.c.added.label("comment_added_on"),
-             object_comments.c.userid.label("comment_by_userid"),
-             object_comments.c.username.label("comment_by_username"),
-             object_comments.c.user_flags.label("comment_userset_flags"),
-             object_comments.c.contents.label("comment_text")]
-        ).select_from(
+        sel = select([
+            object_catalog_sample.c.id.label('keyid'),
+            object_catalog_sample.c.objectid,
+            object_catalog_sample.c.ra,
+            object_catalog_sample.c.dec,
+            object_catalog_sample.c.extra_columns,
+            object_comments.c.added.label("comment_added_on"),
+            object_comments.c.userid.label("comment_by_userid"),
+            object_comments.c.username.label("comment_by_username"),
+            object_comments.c.contents.label("comment_text"),
+            object_comments.c.user_flags.label("comment_userset_flags"),
+            object_catalog_sample.c.user_flags,
+        ]).select_from(
             join
         )
 
-    elif getinfo == 'plotcols':
-
-        sel = select(
-            [object_catalog_sample.c.id,
-             object_catalog_sample.c.extra_columns['g-i'],
-             object_catalog_sample.c.extra_columns['g-r'],
-             object_catalog_sample.c.extra_columns['flux_radius_ave_g'],
-             object_catalog_sample.c.extra_columns['mu_ave_g']]
-        ).select_from(object_catalog_sample)
-        fast_fetch = True
-
-    elif getinfo == 'objectids':
-        sel = select([
-            object_catalog_sample.c.id,
-            object_catalog_sample.c.objectid
-        ]).select_from(join).distinct()
-
-    elif getinfo == 'review-assignments':
-        sel = select(
-            [object_catalog_sample.c.id,
-             object_catalog_sample.c.objectid,
-             func.array_agg(object_reviewers.c.userid).label("reviewer_userid")]
-        ).select_from(join).group_by(
-            object_catalog_sample.c.objectid
-        ).group_by(
-            object_catalog_sample.c.id
-        )
-
     else:
         sel = select([
             object_catalog_sample.c.id,
-            object_catalog_sample.c.objectid
-        ]).select_from(join).distinct()
+            object_catalog_sample.c.objectid,
+            object_catalog_sample.c.user_flags,
+        ]).select_from(object_catalog_sample)
 
-    # figure out the where condition
-    if review_status == 'unreviewed-all':
-        actual_sel = sel.where(object_comments.c.added == None)
-    elif review_status == 'reviewed-all':
-        actual_sel = sel.where(object_comments.c.added != None)
+    #
+    # get the actual selection on the review_status kwarg
+    #
 
-    elif review_status == 'reviewed-self' and userid is not None:
-        actual_sel = sel.where(
-            object_comments.c.userid == userid
-        ).where(
-            object_comments.c.added != None
-        )
-    elif review_status == 'reviewed-other' and userid is not None:
-        actual_sel = sel.where(
-            object_comments.c.userid != userid
-        ).where(
-            object_comments.c.added != None
-        )
-    elif review_status == 'assigned-self' and userid is not None:
-        actual_sel = sel.where(
-            object_reviewers.c.userid == userid
-        )
-    elif review_status == 'assigned-reviewed' and userid is not None:
-        actual_sel = sel.where(
-            object_reviewers.c.userid == userid
-        ).where(
-            object_comments.c.added != None
-        )
-    elif review_status == 'assigned-unreviewed' and userid is not None:
-        actual_sel = sel.where(
-            object_reviewers.c.userid == userid
-        ).where(
-            object_comments.c.added == None
-        )
-    elif review_status == 'assigned-all':
-        actual_sel = sel.where(
-            object_reviewers.c.userid != None
-        )
-    elif review_status == 'unassigned-all':
-        actual_sel = sel.where(
-            object_reviewers.c.userid == None
-        )
-    else:
-        actual_sel = sel
+    actual_sel = sel
 
     #
     # add in the pagination
@@ -818,9 +625,8 @@ def get_objects(
                     ret_end_keyid = rows[0]['keyid']
 
             else:
+                ret_start_keyid = 1
                 ret_end_keyid = 1
-                ret_end_keyid = 1
-
 
     # close everything down if we were passed a database URL only and had to
     # make a new engine
@@ -829,8 +635,111 @@ def get_objects(
         meta.bind = None
         engine.dispose()
 
-    return rows, ret_start_keyid, ret_end_keyid, revorder
+    #
+    # now filter on the review conditions
+    #
+    actual_rows = []
 
+    if review_status == 'complete-good':
+        for row in rows:
+            if fast_fetch:
+                check_item = row[-1]
+            else:
+                check_item = row['user_flags']
+
+            bad_flag_sum = sum(check_item[k] for k in bad_flags)
+            good_flag_sum = sum(check_item[k] for k in good_flags)
+            if good_flag_sum >= max_good_votes and bad_flag_sum < max_bad_votes:
+                actual_rows.append(row)
+
+    elif review_status == 'complete-bad':
+        for row in rows:
+            if fast_fetch:
+                check_item = row[-1]
+            else:
+                check_item = row['user_flags']
+
+            good_flag_sum = sum(check_item[k] for k in good_flags)
+            bad_flag_sum = sum(check_item[k] for k in bad_flags)
+            if bad_flag_sum >= max_bad_votes and good_flag_sum < max_good_votes:
+                actual_rows.append(row)
+
+    elif review_status == 'incomplete':
+        for row in rows:
+            if fast_fetch:
+                check_item = row[-1]
+            else:
+                check_item = row['user_flags']
+
+            bad_flag_sum = sum(check_item[k] for k in bad_flags)
+            good_flag_sum = sum(check_item[k] for k in good_flags)
+
+            if bad_flag_sum < max_bad_votes and good_flag_sum < max_good_votes:
+                actual_rows.append(row)
+
+    else:
+        actual_rows = rows
+
+    # fix the start and end keyids
+    if fast_fetch:
+        if len(actual_rows) > 0:
+            if not revorder:
+                ret_start_keyid = actual_rows[0][0]
+                ret_end_keyid = actual_rows[-1][0]
+            else:
+                ret_start_keyid = actual_rows[-1][0]
+                ret_end_keyid = actual_rows[0][0]
+
+        else:
+            ret_start_keyid = 1
+            ret_end_keyid = 1
+
+    else:
+        if len(actual_rows) > 0:
+            if not revorder:
+                ret_start_keyid = actual_rows[0]['keyid']
+                ret_end_keyid = actual_rows[-1]['keyid']
+            else:
+                ret_start_keyid = actual_rows[-1]['keyid']
+                ret_end_keyid = actual_rows[0]['keyid']
+
+        else:
+            ret_start_keyid = 1
+            ret_end_keyid = 1
+
+    return actual_rows, ret_start_keyid, ret_end_keyid, revorder
+
+
+def get_object_count(
+        dbinfo,
+        good_flags,
+        max_good_votes,
+        bad_flags,
+        max_bad_votes,
+        review_status='all',
+        dbkwargs=None
+):
+    '''
+    This counts all objects in the database.
+
+    '''
+
+    rows, start_keyid, end_keyid, revorder = get_objects(
+        dbinfo,
+        good_flags,
+        max_good_votes,
+        bad_flags,
+        max_bad_votes,
+        review_status=review_status,
+        start_keyid=1,
+        end_keyid=None,
+        max_objects=None,
+        getinfo='objectids',
+        fast_fetch=True,
+        dbkwargs=dbkwargs,
+    )
+
+    return len(rows)
 
 
 def export_all_objects(outfile,
@@ -923,6 +832,7 @@ def insert_object_comments(userid,
 
     # prepare the tables
     object_comments = meta.tables['object_comments']
+    object_catalog = meta.tables['object_catalog']
 
     with conn.begin():
 
@@ -956,6 +866,29 @@ def insert_object_comments(userid,
         updated = res.rowcount
         res.close()
 
+        #
+        # now update the counts for the object_flags
+        #
+        sel = select([object_catalog.c.user_flags]).where(
+            object_catalog.c_objectid == objectid
+        ).select_from(object_catalog)
+
+        res = conn.execute(sel)
+        flag_counts = res.first()
+
+        for k in user_flags:
+            if user_flags[k] is True:
+                flag_counts[k] = flag_counts[k] + 1
+
+        upd = update(object_catalog).where(
+            object_catalog.c.objectid == objectid
+        ).values(
+            {'user_flags':flag_counts}
+        )
+
+        res = conn.execute(upd)
+        res.close()
+
     # close everything down if we were passed a database URL only and had to
     # make a new engine
     if engine:
@@ -964,97 +897,6 @@ def insert_object_comments(userid,
         engine.dispose()
 
     return updated
-
-
-
-def update_object_flags(objectid,
-                        flags,
-                        dbinfo,
-                        dbkwargs=None):
-    '''
-    This updates an object's flags.
-
-    Parameters
-    ----------
-
-    objectid : int
-        The objectid of the object being updated.
-
-    flags : dict
-        The flags from the frontend as a dict with keys = the names of the flags
-        and the values as booleans representing if the flag is set or None.
-
-    dbinfo : tuple
-        This is a tuple of two items:
-
-        - the database URL or the connection instance to use
-        - the database metadata object
-
-        If the database URL is provided, a new engine will be used. If the
-        connection itself is provided, it will be re-used.
-
-    dbkwargs : dict or None
-        A dict of kwargs to pass to the database open function.
-
-    Returns
-    -------
-
-    dict
-        Returns all of the object's info as a dict.
-
-    '''
-
-    #
-    # get the database
-    #
-    dbref, dbmeta = dbinfo
-    if not dbkwargs:
-        dbkwargs = {}
-    if isinstance(dbref, str) and 'postgres' in dbref:
-        if not dbkwargs:
-            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
-        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
-            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
-        elif dbkwargs and 'engine_kwargs' in dbkwargs:
-            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
-        engine, conn, meta = get_postgres_db(dbref,
-                                             dbmeta,
-                                             **dbkwargs)
-    elif isinstance(dbref, str) and 'postgres' not in dbref:
-        raise NotImplementedError(
-            "viz-inspect currently doesn't support non-Postgres databases."
-        )
-    else:
-        engine, conn, meta = None, dbref, dbmeta
-        meta.bind = conn
-    #
-    # end of database get
-    #
-
-    # prepare the tables
-    object_catalog = meta.tables['object_catalog']
-
-    upd = update(object_catalog).where(
-        object_catalog.c.objectid == objectid
-    ).values(
-        {'user_flags':flags}
-    )
-
-    with conn.begin():
-        conn.execute(upd)
-
-    # now look up the object and get all of its info
-    with conn.begin():
-        objectinfo = get_object(objectid, (conn, meta), dbkwargs)
-
-    # close everything down if we were passed a database URL only and had to
-    # make a new engine
-    if engine:
-        conn.close()
-        meta.bind = None
-        engine.dispose()
-
-    return objectinfo
 
 
 #######################
@@ -1134,7 +976,6 @@ def update_review_assignments(objectid_list,
     # prepare the tables
     object_reviewers = meta.tables['object_reviewers']
 
-
     if not do_unassign:
 
         statement = pg.insert(
@@ -1167,14 +1008,12 @@ def update_review_assignments(objectid_list,
     return retval
 
 
-
 def chunker(seq, size):
     '''
     https://stackoverflow.com/a/434328
     '''
 
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
-
 
 
 def update_review_assignments_from_file(
@@ -1249,7 +1088,6 @@ def update_review_assignments_from_file(
             LOGINFO("Assigned %s objects to user ID: %s" %
                     (assigned_items,
                      this_userid if this_userid > 0 else None))
-
 
     # close everything down if we were passed a database URL only and had to
     # make a new engine

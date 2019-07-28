@@ -135,6 +135,7 @@ class DatabaseJSONEncoder(json.JSONEncoder):
         else:
             return json.JSONEncoder.default(self, obj)
 
+
 def json_dumps(obj):
     '''
     This uses a customized JSONEncoder to be able to serialize more things.
@@ -210,7 +211,6 @@ def new_vizinspect_db(
         db.close()
 
 
-
 #########################
 ## DATABASE CONNECTION ##
 #########################
@@ -265,7 +265,6 @@ def get_vizinspect_db(database_url,
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
 
-
     if not use_engine:
         if isinstance(engine_kwargs, dict):
             database_engine = create_engine(database_url,
@@ -284,7 +283,6 @@ def get_vizinspect_db(database_url,
     conn = database_engine.connect()
 
     return database_engine, conn, database_metadata
-
 
 
 def get_postgres_db(database_url,

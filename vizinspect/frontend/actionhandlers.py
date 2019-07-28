@@ -16,7 +16,6 @@ import os.path
 import multiprocessing as mp
 import json
 from datetime import datetime
-import pathlib
 
 import numpy as np
 
@@ -80,76 +79,20 @@ from tornado import web
 ###################
 
 from .basehandler import BaseHandler
-
-from ..backend import catalogs, images
+from ..backend import catalogs
 
 
 ######################
 ## WORKER FUNCTIONS ##
 ######################
 
-def worker_make_plot(
-        objectid,
-        basedir,
-        random_sample_percent=2.0,
-        override_dbinfo=None,
-        override_client=None,
-        raiseonfail=False,
-):
-    '''
-    This makes the main plot for a specific objectid.
-
-    '''
-
-    try:
-
-        currproc = mp.current_process()
-
-        if not override_client:
-            bucket_client = currproc.bucket_client
-        else:
-            bucket_client = override_client
-
-        if not override_dbinfo:
-            conn, meta = currproc.connection, currproc.metadata
-        else:
-            conn, meta = override_dbinfo
-
-        # get the plot if it exists
-        objectplot = os.path.abspath(
-            os.path.join(
-                basedir,
-                'viz-inspect-data',
-                'plot-objectid-{objectid}.png'.format(objectid=objectid)
-            )
-        )
-
-        if not os.path.exists(objectplot):
-
-            made_plot = images.make_main_plot(
-                objectid,
-                (conn, meta),
-                os.path.join(basedir, 'viz-inspect-data'),
-                bucket_client=bucket_client,
-                random_sample_percent=random_sample_percent,
-            )
-            objectplot = os.path.abspath(made_plot)
-
-        return objectplot
-
-    except Exception:
-        LOGGER.exception("Could not get info for object: %s" % objectid)
-        if raiseonfail:
-            raise
-
-        return None
-
-
 def worker_get_object(
         objectid,
         basedir,
-        userid,
-        random_sample_percent=2.0,
+        good_flags,
+        max_good_votes,
+        bad_flags,
+        max_bad_votes,
         override_dbinfo=None,
         override_client=None,
         raiseonfail=False,
@@ -161,10 +104,6 @@ def worker_get_object(
 
     - gets the object from the catalog CSV
     - gets the object's comments from the comments CSV
-    - gets the object's plot. writes plot to the site_datadir
-    - plot files have names like '{catalog_fname}-source-{index}-plot.png'
-    - these are kept around until the server exits
-    - if a plot file exists, we don't try to make a new one
 
     '''
 
@@ -192,12 +131,6 @@ def worker_get_object(
             if x['comment_added_on'] is not None
         ]
 
-        # make a list of the reviewers' user IDs
-        reviewer_userid = list(
-            set([x['reviewer_userid'] for x in objectinfo
-                 if x['reviewer_userid'] is not None])
-        )
-
         comments = sorted(
             comments,
             key=lambda x: (
@@ -213,46 +146,34 @@ def worker_get_object(
         del objectinfo_dict['comment_by_username']
         del objectinfo_dict['comment_userset_flags']
         del objectinfo_dict['comment_text']
-        objectinfo_dict['reviewer_userid'] = reviewer_userid
 
-        objectinfo_dict['filepath'] = 'redacted'
+        # check this object's review status
+        bad_flag_sum = sum(
+            objectinfo_dict['user_flags'][k] for k in bad_flags
+        )
+        good_flag_sum = sum(
+            objectinfo_dict['user_flags'][k] for k in good_flags
+        )
 
-        objectplot = 'none' #worker_make_plot(
-            #objectid,
-            #basedir,
-            #random_sample_percent=random_sample_percent,
-            #override_dbinfo=override_dbinfo,
-            #override_client=override_client,
-            #raiseonfail=raiseonfail
-        #)
-
-        # set the readonly flag
-        if (len(objectinfo_dict['reviewer_userid']) > 0 and
-            userid in objectinfo_dict['reviewer_userid']):
-            readonly = False
-        elif (len(objectinfo_dict['reviewer_userid']) > 0 and
-              userid not in objectinfo_dict['reviewer_userid']):
-            readonly = True
-        elif (len(objectinfo_dict['reviewer_userid']) == 0):
-            readonly = False
-        else:
-            readonly = True
+        if bad_flag_sum >= max_bad_votes or good_flag_sum >= max_good_votes:
+            review_status = 'complete'
+        elif good_flag_sum >= max_good_votes and bad_flag_sum < max_bad_votes:
+            review_status = 'complete-good'
+        elif bad_flag_sum >= max_bad_votes and good_flag_sum < max_good_votes:
+            review_status = 'complete-bad'
+        elif bad_flag_sum < max_bad_votes and good_flag_sum < max_good_votes:
+            review_status = 'incomplete'
 
         # this is the dict we return
         retdict = {
             'info': objectinfo_dict,
-            'plot':os.path.basename(objectplot),
             'comments':comments,
-            'readonly':readonly
+            'review_status':review_status,
         }
-
-        # touch the plot file so we know it was recently accessed and the cache
-        # won't evict it because it's accessed often
-        pathlib.Path(objectplot).touch()
 
         return retdict
 
-    except Exception as e:
+    except Exception:
         LOGGER.exception("Could not get info for object: %s" % objectid)
         if raiseonfail:
             raise
@@ -261,8 +182,11 @@ def worker_get_object(
 
 
 def worker_get_objects(
+        good_flags,
+        max_good_votes,
+        bad_flags,
+        max_bad_votes,
         review_status='all',
-        userid=None,
         start_keyid=1,
         end_keyid=None,
         max_objects=100,
@@ -285,8 +209,11 @@ def worker_get_objects(
         # figure out the page slices by looking up the object count
         list_count = catalogs.get_object_count(
             (conn, meta),
+            good_flags,
+            max_good_votes,
+            bad_flags,
+            max_bad_votes,
             review_status=review_status,
-            userid=userid,
         )
         if (list_count % max_objects):
             n_pages = int(list_count/max_objects) + 1
@@ -297,8 +224,11 @@ def worker_get_objects(
         objectlist, ret_start_keyid, ret_end_keyid, revorder = (
             catalogs.get_objects(
                 (conn, meta),
+                good_flags,
+                max_good_votes,
+                bad_flags,
+                max_bad_votes,
                 review_status=review_status,
-                userid=userid,
                 start_keyid=start_keyid,
                 end_keyid=end_keyid,
                 max_objects=max_objects,
@@ -308,7 +238,7 @@ def worker_get_objects(
         )
 
         # reform to a single list
-        returned_objectlist = sorted(list(set([x[1] for x in objectlist])))
+        returned_objectlist = sorted(list({x[1] for x in objectlist}))
 
         # this is the dict we return
         retdict = {
@@ -322,13 +252,12 @@ def worker_get_objects(
 
         return retdict
 
-    except Exception as e:
+    except Exception:
         LOGGER.exception("Could not get object list.")
         if raiseonfail:
             raise
 
         return None
-
 
 
 def worker_insert_object_comments(
@@ -366,25 +295,11 @@ def worker_insert_object_comments(
 
         return retdict
 
-    except Exception as e:
+    except Exception:
         LOGGER.exception("Could not insert the comments into the DB.")
         if raiseonfail:
             raise
         return None
-
-
-
-def worker_update_object_flags(
-        objectid,
-        flags,
-        override_dbinfo=None,
-        raiseonfail=False,
-):
-    '''
-    This updates the global object flags.
-
-    '''
-
 
 
 def worker_export_catalog(
@@ -453,7 +368,7 @@ def worker_list_review_assignments(
                  fast_fetch=True
             )
 
-            final_objects = sorted(list(set([x[1] for x in list_objects])))
+            final_objects = sorted(list({x[1] for x in list_objects}))
 
             # this is the dict we return
             retdict = {
@@ -466,7 +381,6 @@ def worker_list_review_assignments(
             }
 
             return retdict
-
 
         elif list_type == 'assigned' and user_id is not None:
 
@@ -495,7 +409,7 @@ def worker_list_review_assignments(
             )
 
             # we're only interested in the assigned object lists
-            final_objects = sorted(list(set([x[1] for x in list_objects])))
+            final_objects = sorted(list({x[1] for x in list_objects}))
 
             # this is the dict we return
             retdict = {
@@ -509,13 +423,12 @@ def worker_list_review_assignments(
 
             return retdict
 
-    except Exception as e:
+    except Exception:
         LOGGER.exception("Could not get review assignments.")
         if raiseonfail:
             raise
 
         return None
-
 
 
 def worker_assign_reviewer(
@@ -547,7 +460,7 @@ def worker_assign_reviewer(
 
         return updated_assignments
 
-    except Exception as e:
+    except Exception:
 
         LOGGER.exception("Could not assign objects for review.")
         if raiseonfail:
@@ -597,7 +510,6 @@ class ObjectListHandler(BaseHandler):
         self.ratelimit = ratelimit
         self.cachedir = cachedir
 
-
     @gen.coroutine
     def get(self):
         '''This handles GET requests to the /api/list-objects endpoint.
@@ -609,13 +521,10 @@ class ObjectListHandler(BaseHandler):
             Sets the type of list retrieval:
 
             - 'all' -> all objects
-            - 'reviewed-self' -> objects reviewed by this user
-            - 'reviewed-other' -> objects reviewed by other users
-            - 'assigned-self' -> objects assigned to this user
-            - 'assigned-reviewed' -> objects assigned to self and reviewed
-            - 'assigned-unreviewed' -> objects assigned to self but unreviewed
-            - 'assigned-all' -> all objects assigned to some reviewer
-            - 'unassigned-all' -> all objects not assigned to any reviewers
+            - 'complete' -> objects that have at last 2 good/bad votes
+            - 'complete-good' -> objects that have at least 2 'good' votes
+            - 'complete-bad' -> objects that have at least 2 'bad' votes
+            - 'incomplete' -> objects that don't have 2 votes either way
 
             For -self retrieval types, we'll get the userid out of the session
             dict.
@@ -653,11 +562,9 @@ class ObjectListHandler(BaseHandler):
             )
 
             if review_status not in ('all',
-                                     'assigned-self',
-                                     'assigned-reviewed',
-                                     'assigned-unreviewed',
-                                     'reviewed-self',
-                                     'reviewed-other'):
+                                     'incomplete',
+                                     'complete-good',
+                                     'complete-bad'):
                 raise ValueError("Unknown review status requested: '%s'" %
                                  review_status)
 
@@ -671,8 +578,11 @@ class ObjectListHandler(BaseHandler):
 
                 objectlist_info = yield self.executor.submit(
                     worker_get_objects,
+                    self.siteinfo['good_flag_keys'],
+                    self.siteinfo['max_good_votes'],
+                    self.siteinfo['bad_flag_keys'],
+                    self.siteinfo['max_bad_votes'],
                     review_status=review_status,
-                    userid=self.current_user['user_id'],
                     start_keyid=keyid,
                     end_keyid=None,
                     max_objects=max_objects,
@@ -682,8 +592,11 @@ class ObjectListHandler(BaseHandler):
 
                 objectlist_info = yield self.executor.submit(
                     worker_get_objects,
+                    self.siteinfo['good_flag_keys'],
+                    self.siteinfo['max_good_votes'],
+                    self.siteinfo['bad_flag_keys'],
+                    self.siteinfo['max_bad_votes'],
                     review_status=review_status,
-                    userid=self.current_user['user_id'],
                     start_keyid=None,
                     end_keyid=keyid,
                     max_objects=max_objects,
@@ -693,13 +606,15 @@ class ObjectListHandler(BaseHandler):
 
                 objectlist_info = yield self.executor.submit(
                     worker_get_objects,
+                    self.siteinfo['good_flag_keys'],
+                    self.siteinfo['max_good_votes'],
+                    self.siteinfo['bad_flag_keys'],
+                    self.siteinfo['max_bad_votes'],
                     review_status=review_status,
-                    userid=self.current_user['user_id'],
                     start_keyid=keyid,
                     end_keyid=None,
                     max_objects=max_objects,
                 )
-
 
             # render the result
             if objectlist_info is not None:
@@ -718,7 +633,7 @@ class ObjectListHandler(BaseHandler):
             self.write(retdict)
             self.finish()
 
-        except Exception as e:
+        except Exception:
 
             LOGGER.exception('Failed to retrieve the object list.')
             self.set_status(400)
@@ -727,7 +642,6 @@ class ObjectListHandler(BaseHandler):
                        'result':None}
             self.write(retdict)
             self.finish()
-
 
 
 class LoadObjectHandler(BaseHandler):
@@ -765,7 +679,6 @@ class LoadObjectHandler(BaseHandler):
         self.httpclient = AsyncHTTPClient(force_instance=True)
         self.ratelimit = ratelimit
         self.cachedir = cachedir
-
 
     @gen.coroutine
     def get(self, objectid):
@@ -812,8 +725,10 @@ class LoadObjectHandler(BaseHandler):
                 worker_get_object,
                 objindex,
                 self.basedir,
-                self.current_user['user_id'],
-                random_sample_percent=self.siteinfo['random_sample_percent']
+                self.siteinfo['good_flag_keys'],
+                self.siteinfo['max_good_votes'],
+                self.siteinfo['bad_flag_keys'],
+                self.siteinfo['max_bad_votes'],
             )
 
             if objectinfo is not None:
@@ -832,25 +747,7 @@ class LoadObjectHandler(BaseHandler):
             self.write(retdict)
             self.finish()
 
-            # when we're done with this object, see if we need to plot neighbors
-            if False: #neighborhood is not None:
-
-                # we'll only make plots for up to 7 other objects
-                for neighbor in neighborhood[:7]:
-
-                    yield self.executor.submit(
-                        worker_make_plot,
-                        neighbor,
-                        self.basedir,
-                        random_sample_percent=(
-                            self.siteinfo['random_sample_percent']
-                        )
-                    )
-
-                    LOGGER.info("Background plot for %s done.")
-
-
-        except Exception as e:
+        except Exception:
 
             LOGGER.exception('failed to get requested object ID: %r' % objectid)
             self.set_status(400)
@@ -859,7 +756,6 @@ class LoadObjectHandler(BaseHandler):
                        'result':None}
             self.write(retdict)
             self.finish()
-
 
 
 class SaveObjectHandler(BaseHandler):
@@ -897,7 +793,6 @@ class SaveObjectHandler(BaseHandler):
         self.httpclient = AsyncHTTPClient(force_instance=True)
         self.ratelimit = ratelimit
         self.cachedir = cachedir
-
 
     @gen.coroutine
     def post(self, objectid):
@@ -940,7 +835,6 @@ class SaveObjectHandler(BaseHandler):
             self.write(retdict)
             raise web.Finish()
 
-
         try:
 
             objectid = int(xhtml_escape(objectid))
@@ -959,12 +853,16 @@ class SaveObjectHandler(BaseHandler):
                     worker_get_object,
                     objectid,
                     self.basedir,
-                    userid,
+                    self.siteinfo['good_flag_keys'],
+                    self.siteinfo['max_good_votes'],
+                    self.siteinfo['bad_flag_keys'],
+                    self.siteinfo['max_bad_votes'],
                 )
 
                 # if this object actually exists and is writable, we can do
                 # stuff on it
-                if objectinfo is not None and not objectinfo['readonly']:
+                if (objectinfo is not None and
+                    objectinfo['review_status'] == 'incomplete'):
 
                     commentdict = {'objectid':objectid,
                                    'comment':comment_text,
@@ -1002,8 +900,7 @@ class SaveObjectHandler(BaseHandler):
 
                     retdict = {'status':'failed',
                                'message':(
-                                   "Object not found, or is not in your "
-                                   "list of objects to review. "
+                                   "Object not found, or is already complete. "
                                    "Your comments were not saved."
                                ),
                                'result':None}
@@ -1021,8 +918,7 @@ class SaveObjectHandler(BaseHandler):
                 self.write(retdict)
                 self.finish()
 
-
-        except Exception as e:
+        except Exception:
 
             LOGGER.exception('failed to save changes for object ID: %r' %
                              objectid)
@@ -1032,7 +928,6 @@ class SaveObjectHandler(BaseHandler):
                        'result':None}
             self.write(retdict)
             self.finish()
-
 
 
 class ReviewAssignmentHandler(BaseHandler):
@@ -1073,7 +968,6 @@ class ReviewAssignmentHandler(BaseHandler):
         # apikey verification info
         self.apikey_verified = False
         self.apikey_info = None
-
 
     @gen.coroutine
     def get(self):
@@ -1271,7 +1165,7 @@ class ReviewAssignmentHandler(BaseHandler):
                 self.write(retdict)
                 self.finish()
 
-            except Exception as e:
+            except Exception:
 
                 LOGGER.exception("Failed to list assignments")
                 self.set_status(400)
@@ -1294,8 +1188,6 @@ class ReviewAssignmentHandler(BaseHandler):
             }
             self.write(retdict)
             self.finish()
-
-
 
     @gen.coroutine
     def post(self):
@@ -1396,7 +1288,7 @@ class ReviewAssignmentHandler(BaseHandler):
                     self.write(retdict)
                     self.finish()
 
-            except Exception as e:
+            except Exception:
 
                 LOGGER.exception("Failed to understand request.")
                 self.set_status(400)
