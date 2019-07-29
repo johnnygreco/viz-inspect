@@ -63,7 +63,7 @@ except Exception:
 
     utc = UTC()
 
-from sqlalchemy import select, update, func
+from sqlalchemy import select, update, func, distinct
 from sqlalchemy.dialects import postgresql as pg
 
 import markdown
@@ -378,6 +378,7 @@ def get_object(objectid,
          object_catalog.c.dec,
          object_catalog.c.user_flags,
          object_catalog.c.extra_columns,
+         object_catalog.c.review_status,
          object_comments.c.added.label("comment_added_on"),
          object_comments.c.userid.label("comment_by_userid"),
          object_comments.c.username.label("comment_by_username"),
@@ -408,10 +409,7 @@ def get_object(objectid,
 
 def get_objects(
         dbinfo,
-        good_flags,
-        max_good_votes,
-        bad_flags,
-        max_bad_votes,
+        userid_check=None,
         review_status='all',
         start_keyid=1,
         end_keyid=None,
@@ -436,18 +434,22 @@ def get_objects(
         If the database URL is provided, a new engine will be used. If the
         connection itself is provided, it will be re-used.
 
+    userid_check : tuple
+        This is of the form: (userid_to_check, include_or_exclude) where
+        userid_to_check is the integer user ID of the user to check and
+        include_or_exclude is a string from {'include', 'exclude'}.
+
     review_status : str
         This is a string that indicates what kinds of objects to return.
 
         Choose from:
 
         - 'all' -> all objects
-        - 'complete' -> objects that have at last 2 good/bad votes
         - 'complete-good' -> objects that have at least 2 'good' votes
         - 'complete-bad' -> objects that have at least 2 'bad' votes
         - 'incomplete' -> objects that don't have at least 2 votes either way
 
-    getinfo: {'objectids','all'}
+    getinfo: {'objectids','all', 'count'}
         If 'objectids', returns only the objectids matching the specified
         criteria. If 'all', returns all info per object.
 
@@ -531,6 +533,12 @@ def get_objects(
             join
         )
 
+    elif getinfo == 'count':
+
+        sel = select(
+            [func.count(distinct(object_catalog_sample.c.id))]
+        ).select_from(join).distinct()
+
     else:
         sel = select([
             object_catalog_sample.c.id,
@@ -556,10 +564,22 @@ def get_objects(
     else:
         actual_sel = sel
 
-    if only_for_userid is not None:
-        actual_sel = actual_sel.where(
-            object_reviewers.c.userid == only_for_userid
-        )
+    #
+    # add the user id handling
+    #
+
+    if userid_check is not None:
+
+        userid_to_check, include_or_exclude = userid_check
+
+        if include_or_exclude == 'include':
+            actual_sel = actual_sel.where(
+                object_comments.c.userid == userid_to_check
+            )
+        else:
+            actual_sel = actual_sel.where(
+                object_comments.c.userid != userid_to_check
+            )
 
     #
     # add in the pagination
@@ -658,10 +678,7 @@ def get_objects(
 
 def get_object_count(
         dbinfo,
-        good_flags,
-        max_good_votes,
-        bad_flags,
-        max_bad_votes,
+        userid_check=None,
         review_status='all',
         dbkwargs=None
 ):
@@ -672,20 +689,17 @@ def get_object_count(
 
     rows, start_keyid, end_keyid, revorder = get_objects(
         dbinfo,
-        good_flags,
-        max_good_votes,
-        bad_flags,
-        max_bad_votes,
+        userid_check=userid_check,
         review_status=review_status,
-        start_keyid=1,
+        start_keyid=None,
         end_keyid=None,
         max_objects=None,
-        getinfo='objectids',
+        getinfo='count',
         fast_fetch=True,
         dbkwargs=dbkwargs,
     )
 
-    return len(rows)
+    return rows[0][0]
 
 
 def export_all_objects(outfile,
@@ -705,6 +719,10 @@ def export_all_objects(outfile,
 def insert_object_comments(userid,
                            comments,
                            dbinfo,
+                           good_flags,
+                           max_good_votes,
+                           bad_flags,
+                           max_bad_votes,
                            username=None,
                            dbkwargs=None):
     '''This inserts a comment for the object.
@@ -796,44 +814,80 @@ def insert_object_comments(userid,
             output_format='html5',
         )
 
-        # prepare the insert
-        insert = pg.insert(
+        # check if this user has already commented on this object
+        sel = select([object_comments.c.userid]).select_from(
             object_comments
-        ).values(
-            {'objectid':objectid,
-             'added':added,
-             'updated':updated,
-             'userid':userid,
-             'username':username,
-             'user_flags':user_flags,
-             'contents':rendered_comment}
+        ).where(
+            object_comments.c.objectid == objectid
+        ).where(
+            object_comments.c.userid == userid
         )
-        res = conn.execute(insert)
-        updated = res.rowcount
-        res.close()
-
-        #
-        # now update the counts for the object_flags
-        #
-        sel = select([object_catalog.c.user_flags]).where(
-            object_catalog.c.objectid == objectid
-        ).select_from(object_catalog)
 
         res = conn.execute(sel)
-        flag_counts = res.scalar()
-
-        for k in user_flags:
-            if user_flags[k] is True:
-                flag_counts[k] = flag_counts[k] + 1
-
-        upd = update(object_catalog).where(
-            object_catalog.c.objectid == objectid
-        ).values(
-            {'user_flags':flag_counts}
-        )
-
-        res = conn.execute(upd)
+        checkcount = res.rowcount
         res.close()
+
+        if checkcount > 0:
+
+            LOGINFO("Userid: %s has already commented on object: %s" %
+                    (userid, objectid))
+            updated = 0
+
+        else:
+
+            # prepare the insert
+            insert = pg.insert(
+                object_comments
+            ).values(
+                {'objectid':objectid,
+                 'added':added,
+                 'updated':updated,
+                 'userid':userid,
+                 'username':username,
+                 'user_flags':user_flags,
+                 'contents':rendered_comment}
+            )
+            res = conn.execute(insert)
+            updated = res.rowcount
+            res.close()
+
+            #
+            # now update the counts for the object_flags
+            #
+            sel = select([object_catalog.c.user_flags]).where(
+                object_catalog.c.objectid == objectid
+            ).select_from(object_catalog)
+
+            res = conn.execute(sel)
+            flag_counts = res.scalar()
+
+            for k in user_flags:
+                if user_flags[k] is True:
+                    flag_counts[k] = flag_counts[k] + 1
+
+            # if any of the good/bad flags make it over the limits, set the
+            # appropriate review_status
+            bad_flag_sum = sum(flag_counts[k] for k in bad_flags)
+            good_flag_sum = sum(flag_counts[k] for k in good_flags)
+
+            if good_flag_sum >= max_good_votes:
+                new_review_status = 'complete-good'
+            elif bad_flag_sum >= max_bad_votes:
+                new_review_status = 'complete-bad'
+            elif (bad_flag_sum < max_good_votes and
+                  good_flag_sum < max_bad_votes):
+                new_review_status = 'incomplete'
+
+            # update the flags and review status
+            upd = update(object_catalog).where(
+                object_catalog.c.objectid == objectid
+            ).values(
+                {'user_flags':flag_counts,
+                 'review_status':new_review_status}
+            )
+
+            res = conn.execute(upd)
+            res.close()
 
     # close everything down if we were passed a database URL only and had to
     # make a new engine
@@ -843,201 +897,3 @@ def insert_object_comments(userid,
         engine.dispose()
 
     return updated
-
-
-#######################
-## ASSIGNING OBJECTS ##
-#######################
-
-def update_review_assignments(objectid_list,
-                              reviewer_userid,
-                              dbinfo,
-                              do_unassign=False,
-                              dbkwargs=None):
-    '''
-    This updates review assignments for a list of objectids
-
-
-    Parameters
-    ----------
-
-    objectid_list : list of ints
-        The objectids of the object being updated.
-
-    reviewer_userid : int
-        The userid of the reviewer.
-
-    do_unassign : bool
-        If False, will assign the objects in `objectid_list` to
-        `reviewer_userid`. If True, will unassign objects in `objectid_list`
-        from the reviewer, i.e. set their `reviewer_userid` to NULL.
-
-    dbinfo : tuple
-        This is a tuple of two items:
-
-        - the database URL or the connection instance to use
-        - the database metadata object
-
-        If the database URL is provided, a new engine will be used. If the
-        connection itself is provided, it will be re-used.
-
-    dbkwargs : dict or None
-        A dict of kwargs to pass to the database open function.
-
-    Returns
-    -------
-
-    dict
-        Returns all of the object's info as a dict.
-
-    '''
-
-    #
-    # get the database
-    #
-    dbref, dbmeta = dbinfo
-    if not dbkwargs:
-        dbkwargs = {}
-    if isinstance(dbref, str) and 'postgres' in dbref:
-        if not dbkwargs:
-            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
-        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
-            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
-        elif dbkwargs and 'engine_kwargs' in dbkwargs:
-            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
-        engine, conn, meta = get_postgres_db(dbref,
-                                             dbmeta,
-                                             **dbkwargs)
-    elif isinstance(dbref, str) and 'postgres' not in dbref:
-        raise NotImplementedError(
-            "viz-inspect currently doesn't support non-Postgres databases."
-        )
-    else:
-        engine, conn, meta = None, dbref, dbmeta
-        meta.bind = conn
-    #
-    # end of database get
-    #
-
-    # prepare the tables
-    object_reviewers = meta.tables['object_reviewers']
-
-    if not do_unassign:
-
-        statement = pg.insert(
-            object_reviewers
-        ).values(
-            [{'objectid':x,
-              'userid':reviewer_userid} for x in objectid_list]
-        )
-
-    else:
-
-        statement = update(object_reviewers).where(
-            object_reviewers.c.objectid.in_(list(objectid_list))
-        ).values(
-            {'userid': None}
-        )
-
-    with conn.begin():
-        res = conn.execute(statement)
-        retval = res.rowcount
-        res.close()
-
-    # close everything down if we were passed a database URL only and had to
-    # make a new engine
-    if engine:
-        conn.close()
-        meta.bind = None
-        engine.dispose()
-
-    return retval
-
-
-def chunker(seq, size):
-    '''
-    https://stackoverflow.com/a/434328
-    '''
-
-    return (seq[pos:pos + size] for pos in range(0, len(seq), size))
-
-
-def update_review_assignments_from_file(
-        assignment_csv,
-        dbinfo,
-        chunksize=100,
-        dbkwargs=None
-):
-    '''
-    This updates the review assignments from a file.
-
-    The file should be a CSV of the form::
-
-        objectid,userid     -> header row must have these labels
-        1,1                 -> assign objectid 1 to userid 1
-        75,4                -> assign objectid 75 to userid 4
-        100,0               -> 0 means unassign objectid 100 from all reviewers
-        ...
-
-    '''
-
-    #
-    # get the database
-    #
-    dbref, dbmeta = dbinfo
-    if not dbkwargs:
-        dbkwargs = {}
-    if isinstance(dbref, str) and 'postgres' in dbref:
-        if not dbkwargs:
-            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
-        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
-            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
-        elif dbkwargs and 'engine_kwargs' in dbkwargs:
-            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
-        engine, conn, meta = get_postgres_db(dbref,
-                                             dbmeta,
-                                             **dbkwargs)
-    elif isinstance(dbref, str) and 'postgres' not in dbref:
-        raise NotImplementedError(
-            "viz-inspect currently doesn't support non-Postgres databases."
-        )
-    else:
-        engine, conn, meta = None, dbref, dbmeta
-        meta.bind = conn
-    #
-    # end of database get
-    #
-
-    # read the file
-    assignments = pd.read_csv(assignment_csv)
-
-    grouped_assignments = assignments.groupby(['userid'])
-
-    for name, group in grouped_assignments:
-
-        this_userid = name
-
-        if this_userid == 0:
-            do_unassign = True
-        else:
-            do_unassign = False
-
-        for chunk in chunker(group['objectid'], chunksize):
-
-            assigned_items = update_review_assignments(
-                list(chunk),
-                this_userid,
-                (conn, meta),
-                do_unassign=do_unassign,
-                dbkwargs=dbkwargs
-            )
-            LOGINFO("Assigned %s objects to user ID: %s" %
-                    (assigned_items,
-                     this_userid if this_userid > 0 else None))
-
-    # close everything down if we were passed a database URL only and had to
-    # make a new engine
-    if engine:
-        conn.close()
-        meta.bind = None
-        engine.dispose()

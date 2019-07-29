@@ -243,9 +243,15 @@
             <div class="form-group">
               <select class="custom-select" id="objectlist-pref-select">
                 <option value="all">All objects</option>
-                <option value="incomplete">Objects still under review</option>
-                <option value="complete-good">Objects with sufficient 'good' votes</option>
-                <option value="complete-bad">Objects with sufficient 'bad' votes</option>
+                <option value="incomplete">All objects still open for votes</option>
+                <option value="complete-good">All objects closed as 'good'</option>
+                <option value="complete-bad">All objects closed as 'bad'</option>
+                <option value="self-incomplete">My voted objects still open for votes</option>
+                <option value="self-complete-good">My voted objects closed as 'good'</option>
+                <option value="self-complete-bad">My voted objects closed as 'bad'</option>
+                <option value="other-incomplete">Objects I haven't voted on still open for votes</option>
+                <option value="other-complete-good">Objects I haven't voted on closed as 'good'</option>
+                <option value="other-complete-bad">Objects I haven't voted on closed as 'bad'</option>
               </select>
             </div>
           </form>
@@ -367,6 +373,6 @@
 
     {% end %}
 
-    });
+  });
 </script>
 {% end %}

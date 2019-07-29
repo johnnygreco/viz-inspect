@@ -806,18 +806,6 @@ def main():
         ## ACTUAL WORK HANDLERS ##
         ##########################
 
-        # this handles review assignments
-        (r'/api/review-assign',
-         actions.ReviewAssignmentHandler,
-         {'fernetkey':FERNETSECRET,
-          'executor':EXECUTOR,
-          'authnzerver':AUTHNZERVER,
-          'basedir':BASEDIR,
-          'session_expiry':SESSION_EXPIRY,
-          'siteinfo':SITEINFO,
-          'ratelimit':RATELIMIT,
-          'cachedir':CACHEDIR}),
-
         (r'/api/list-objects',
          actions.ObjectListHandler,
          {'currentdir':CURRENTDIR,

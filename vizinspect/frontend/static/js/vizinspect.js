@@ -435,6 +435,78 @@ var ui = {
           100
         );
       }
+      else if (selected === 'self-incomplete') {
+        ui.debounce(
+          review.get_object_list(
+            'self-incomplete',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
+      }
+      else if (selected === 'other-incomplete') {
+        ui.debounce(
+          review.get_object_list(
+            'other-incomplete',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
+      }
+      else if (selected === 'self-complete-good') {
+        ui.debounce(
+          review.get_object_list(
+            'self-complete-good',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
+      }
+      else if (selected === 'self-complete-bad') {
+        ui.debounce(
+          review.get_object_list(
+            'self-complete-bad',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
+      }
+      else if (selected === 'other-complete-good') {
+        ui.debounce(
+          review.get_object_list(
+            'other-complete-good',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
+      }
+      else if (selected === 'other-complete-bad') {
+        ui.debounce(
+          review.get_object_list(
+            'other-complete-bad',
+            'start',
+            1,
+            'first',
+            0
+          ),
+          100
+        );
+      }
       else {
         ui.debounce(
           review.get_object_list(
@@ -537,7 +609,6 @@ var review = {
   current_keyid: null,
   current_object_reviewstatus: null,
 
-
   objectlist: null,
   objectlist_start_keyid: 1,
   objectlist_end_keyid: 100,
@@ -620,16 +691,34 @@ var review = {
       }
 
       // update the object list type
-      let index_label = 'Current object (browsing all objects)';
+      let index_label = 'Current (browsing all objects)';
 
       if (review_status === 'complete-good') {
-        index_label = 'Current object (in completely reviewed good objects)';
+        index_label = 'Current (in all closed good objects)';
       }
       else if (review_status === 'complete-bad') {
-        index_label = 'Current object (in completely reviewed bad objects)';
+        index_label = 'Current (in all closed bad objects)';
       }
       else if (review_status === 'incomplete') {
-        index_label = 'Current object (in objects with incomplete reviews)';
+        index_label = 'Current (in objects still open for votes)';
+      }
+      else if (review_status === 'self-complete-good') {
+        index_label = 'Current (in closed good objects with your vote)';
+      }
+      else if (review_status === 'self-complete-bad') {
+        index_label = 'Current (in closed bad objects with your vote)';
+      }
+      else if (review_status === 'other-complete-good') {
+        index_label = 'Current (in closed good objects without your vote)';
+      }
+      else if (review_status === 'other-complete-bad') {
+        index_label = 'Current (in closed bad objects with your vote)';
+      }
+      else if (review_status === 'self-incomplete') {
+        index_label = 'Current (in open objects with your vote)';
+      }
+      else if (review_status === 'other-incomplete') {
+        index_label = 'Current (in open objects without your vote)';
       }
       $('#current-index-label').html(index_label);
 
@@ -674,6 +763,7 @@ var review = {
         let objectinfo = result.info;
         let comments = result.comments;
         let object_review_status = result.review_status;
+        let object_already_reviewed = result.already_reviewed;
 
         // update the status
         review.current_objectid = objectinfo.objectid;
@@ -756,6 +846,19 @@ var review = {
               review.current_object_reviewstatus +
               '</div></div>'
           );
+
+        }
+
+        else if (review.current_object_reviewstatus == 'incomplete' &&
+                 object_already_reviewed === true) {
+
+          $('#flag-button-group-1').html(
+            '<div class="row"><div class="col-12">' +
+              'You have already voted on this object. ' +
+              'It remains open to votes from other users. ' +
+              '</div></div>'
+          );
+
         }
 
         else {

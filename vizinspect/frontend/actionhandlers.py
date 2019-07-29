@@ -12,7 +12,6 @@ These are Tornado handlers for the AJAX actions.
 ####################
 
 import logging
-import os.path
 import multiprocessing as mp
 import json
 from datetime import datetime
@@ -87,12 +86,9 @@ from ..backend import catalogs
 ######################
 
 def worker_get_object(
+        userid,
         objectid,
         basedir,
-        good_flags,
-        max_good_votes,
-        bad_flags,
-        max_bad_votes,
         override_dbinfo=None,
         override_client=None,
         raiseonfail=False,
@@ -139,6 +135,10 @@ def worker_get_object(
             reverse=True
         )
 
+        already_reviewed = (
+            userid in (comment['comment_by_userid'] for comment in comments)
+        )
+
         # we return a single dict with all of the object info collapsed into it
         objectinfo_dict = objectinfo[0]
         del objectinfo_dict['comment_added_on']
@@ -147,28 +147,12 @@ def worker_get_object(
         del objectinfo_dict['comment_userset_flags']
         del objectinfo_dict['comment_text']
 
-        # check this object's review status
-        bad_flag_sum = sum(
-            objectinfo_dict['user_flags'][k] for k in bad_flags
-        )
-        good_flag_sum = sum(
-            objectinfo_dict['user_flags'][k] for k in good_flags
-        )
-
-        if bad_flag_sum >= max_bad_votes or good_flag_sum >= max_good_votes:
-            review_status = 'complete'
-        elif good_flag_sum >= max_good_votes and bad_flag_sum < max_bad_votes:
-            review_status = 'complete-good'
-        elif bad_flag_sum >= max_bad_votes and good_flag_sum < max_good_votes:
-            review_status = 'complete-bad'
-        elif bad_flag_sum < max_bad_votes and good_flag_sum < max_good_votes:
-            review_status = 'incomplete'
-
         # this is the dict we return
         retdict = {
             'info': objectinfo_dict,
             'comments':comments,
-            'review_status':review_status,
+            'review_status':objectinfo_dict['review_status'],
+            'already_reviewed':already_reviewed
         }
 
         return retdict
@@ -182,11 +166,8 @@ def worker_get_object(
 
 
 def worker_get_objects(
-        good_flags,
-        max_good_votes,
-        bad_flags,
-        max_bad_votes,
         review_status='all',
+        userid=None,
         start_keyid=1,
         end_keyid=None,
         max_objects=100,
@@ -206,13 +187,49 @@ def worker_get_objects(
         else:
             conn, meta = override_dbinfo
 
+        if review_status == 'all':
+            check_review_status = 'all'
+            userid_check = None
+        elif review_status == 'incomplete':
+            check_review_status = 'incomplete'
+            userid_check = None
+        elif review_status == 'complete-good':
+            check_review_status = 'complete-good'
+            userid_check = None
+        elif review_status == 'complete-bad':
+            check_review_status = 'complete-bad'
+            userid_check = None
+
+        elif review_status == 'self-all' and userid is not None:
+            check_review_status = 'all'
+            userid_check = (userid, 'include')
+        elif review_status == 'self-incomplete' and userid is not None:
+            check_review_status = 'incomplete'
+            userid_check = (userid, 'include')
+        elif review_status == 'self-complete-good' and userid is not None:
+            check_review_status = 'complete-good'
+            userid_check = (userid, 'include')
+        elif review_status == 'self-complete-bad' and userid is not None:
+            check_review_status = 'self-complete-bad'
+            userid_check = (userid, 'include')
+
+        elif review_status == 'other-all' and userid is not None:
+            check_review_status = 'all'
+            userid_check = (userid, 'exclude')
+        elif review_status == 'other-incomplete' and userid is not None:
+            check_review_status = 'incomplete'
+            userid_check = (userid, 'exclude')
+        elif review_status == 'other-complete-good' and userid is not None:
+            check_review_status = 'complete-good'
+            userid_check = (userid, 'exclude')
+        elif review_status == 'other-complete-bad' and userid is not None:
+            check_review_status = 'other-complete-bad'
+            userid_check = (userid, 'exclude')
+
         # figure out the page slices by looking up the object count
         list_count = catalogs.get_object_count(
             (conn, meta),
-            good_flags,
-            max_good_votes,
-            bad_flags,
-            max_bad_votes,
+            userid_check=userid_check,
             review_status=review_status,
         )
         if (list_count % max_objects):
@@ -224,11 +241,8 @@ def worker_get_objects(
         objectlist, ret_start_keyid, ret_end_keyid, revorder = (
             catalogs.get_objects(
                 (conn, meta),
-                good_flags,
-                max_good_votes,
-                bad_flags,
-                max_bad_votes,
-                review_status=review_status,
+                userid_check=userid_check,
+                review_status=check_review_status,
                 start_keyid=start_keyid,
                 end_keyid=end_keyid,
                 max_objects=max_objects,
@@ -264,6 +278,10 @@ def worker_insert_object_comments(
         userid,
         username,
         comments,
+        good_flags,
+        max_good_votes,
+        bad_flags,
+        max_bad_votes,
         override_dbinfo=None,
         raiseonfail=False,
 ):
@@ -285,6 +303,10 @@ def worker_insert_object_comments(
             userid,
             comments,
             (conn, meta),
+            good_flags,
+            max_good_votes,
+            bad_flags,
+            max_bad_votes,
             username=username,
         )
 
@@ -300,173 +322,6 @@ def worker_insert_object_comments(
         if raiseonfail:
             raise
         return None
-
-
-def worker_export_catalog(
-        basedir,
-        outdir='viz-inspect-data',
-        override_dbinfo=None,
-        raiseonfail=False,
-):
-    '''This exports the catalog from the DB to the output dir.
-
-    By default the file is written to the viz-inspect-data dir under the
-    basedir. This allows the server to serve it back to the client if they want
-    to download it after exporting it.
-
-    '''
-
-
-def worker_list_review_assignments(
-        list_type='unassigned',
-        user_id=None,
-        start_keyid=1,
-        end_keyid=None,
-        max_objects=500,
-        override_dbinfo=None,
-        raiseonfail=False,
-):
-    '''
-    This lists review assignments.
-
-    '''
-
-    try:
-
-        if not override_dbinfo:
-            currproc = mp.current_process()
-            conn, meta = currproc.connection, currproc.metadata
-        else:
-            conn, meta = override_dbinfo
-
-        #
-        # parse into dicts
-        #
-
-        if list_type == 'unassigned':
-
-            # figure out the page slices by looking up the object count
-            list_count = catalogs.get_object_count(
-                (conn, meta),
-                review_status='unassigned-all',
-            )
-            if (list_count % max_objects):
-                list_n_pages = int(list_count/max_objects) + 1
-            else:
-                list_n_pages = int(list_count/max_objects)
-
-            (list_objects,
-             list_start_keyid,
-             list_end_keyid, revorder) = catalogs.get_objects(
-                 (conn, meta),
-                 review_status='unassigned-all',
-                 userid=None,
-                 start_keyid=start_keyid,
-                 end_keyid=end_keyid,
-                 max_objects=max_objects,
-                 getinfo='objectids',
-                 fast_fetch=True
-            )
-
-            final_objects = sorted(list({x[1] for x in list_objects}))
-
-            # this is the dict we return
-            retdict = {
-                'rows_per_page':max_objects,
-                'object_list': final_objects,
-                'start_keyid':list_start_keyid,
-                'end_keyid':list_end_keyid,
-                'object_count':list_count,
-                'n_pages':list_n_pages,
-            }
-
-            return retdict
-
-        elif list_type == 'assigned' and user_id is not None:
-
-            # figure out the page slices by looking up the object count
-            list_count = catalogs.get_object_count(
-                (conn, meta),
-                review_status='assigned-self',
-                userid=user_id
-            )
-            if (list_count % max_objects):
-                list_n_pages = int(list_count/max_objects) + 1
-            else:
-                list_n_pages = int(list_count/max_objects)
-
-            (list_objects,
-             list_start_keyid,
-             list_end_keyid, revorder) = catalogs.get_objects(
-                 (conn, meta),
-                 review_status='assigned-self',
-                 userid=user_id,
-                 start_keyid=start_keyid,
-                 end_keyid=end_keyid,
-                 max_objects=max_objects,
-                 getinfo='objectids',
-                 fast_fetch=True
-            )
-
-            # we're only interested in the assigned object lists
-            final_objects = sorted(list({x[1] for x in list_objects}))
-
-            # this is the dict we return
-            retdict = {
-                'rows_per_page':max_objects,
-                'object_list': final_objects,
-                'start_keyid':list_start_keyid,
-                'end_keyid':list_end_keyid,
-                'object_count':list_count,
-                'n_pages':list_n_pages,
-            }
-
-            return retdict
-
-    except Exception:
-        LOGGER.exception("Could not get review assignments.")
-        if raiseonfail:
-            raise
-
-        return None
-
-
-def worker_assign_reviewer(
-        userid,
-        assignment_list,
-        do_unassign=False,
-        override_dbinfo=None,
-        raiseonfail=False,
-):
-    '''
-    This assigns objects to a reviewer.
-
-    '''
-
-    try:
-
-        if not override_dbinfo:
-            currproc = mp.current_process()
-            conn, meta = currproc.connection, currproc.metadata
-        else:
-            conn, meta = override_dbinfo
-
-        updated_assignments = catalogs.update_review_assignments(
-            assignment_list,
-            userid,
-            (conn, meta),
-            do_unassign=do_unassign,
-        )
-
-        return updated_assignments
-
-    except Exception:
-
-        LOGGER.exception("Could not assign objects for review.")
-        if raiseonfail:
-            raise
-
-        return False
 
 
 #####################
@@ -521,13 +376,9 @@ class ObjectListHandler(BaseHandler):
             Sets the type of list retrieval:
 
             - 'all' -> all objects
-            - 'complete' -> objects that have at last 2 good/bad votes
             - 'complete-good' -> objects that have at least 2 'good' votes
             - 'complete-bad' -> objects that have at least 2 'bad' votes
             - 'incomplete' -> objects that don't have 2 votes either way
-
-            For -self retrieval types, we'll get the userid out of the session
-            dict.
 
         page : int, optional, default = 0
            The page number to retrieve.
@@ -564,7 +415,15 @@ class ObjectListHandler(BaseHandler):
             if review_status not in ('all',
                                      'incomplete',
                                      'complete-good',
-                                     'complete-bad'):
+                                     'complete-bad',
+                                     'self-all',
+                                     'self-incomplete',
+                                     'self-complete-good',
+                                     'self-complete-bad',
+                                     'other-all',
+                                     'other-incomplete',
+                                     'other-complete-good',
+                                     'other-complete-bad'):
                 raise ValueError("Unknown review status requested: '%s'" %
                                  review_status)
 
@@ -578,12 +437,7 @@ class ObjectListHandler(BaseHandler):
 
                 objectlist_info = yield self.executor.submit(
                     worker_get_objects,
-                    [x.strip() for x in
-                     self.siteinfo['good_flag_keys'].split(',')],
-                    self.siteinfo['max_good_votes'],
-                    [x.strip() for x in
-                     self.siteinfo['bad_flag_keys'].split(',')],
-                    self.siteinfo['max_bad_votes'],
+                    userid=self.current_user['user_id'],
                     review_status=review_status,
                     start_keyid=keyid,
                     end_keyid=None,
@@ -594,12 +448,7 @@ class ObjectListHandler(BaseHandler):
 
                 objectlist_info = yield self.executor.submit(
                     worker_get_objects,
-                    [x.strip() for x in
-                     self.siteinfo['good_flag_keys'].split(',')],
-                    self.siteinfo['max_good_votes'],
-                    [x.strip() for x in
-                     self.siteinfo['bad_flag_keys'].split(',')],
-                    self.siteinfo['max_bad_votes'],
+                    userid=self.current_user['user_id'],
                     review_status=review_status,
                     start_keyid=None,
                     end_keyid=keyid,
@@ -610,12 +459,7 @@ class ObjectListHandler(BaseHandler):
 
                 objectlist_info = yield self.executor.submit(
                     worker_get_objects,
-                    [x.strip() for x in
-                     self.siteinfo['good_flag_keys'].split(',')],
-                    self.siteinfo['max_good_votes'],
-                    [x.strip() for x in
-                     self.siteinfo['bad_flag_keys'].split(',')],
-                    self.siteinfo['max_bad_votes'],
+                    userid=self.current_user['user_id'],
                     review_status=review_status,
                     start_keyid=keyid,
                     end_keyid=None,
@@ -729,14 +573,9 @@ class LoadObjectHandler(BaseHandler):
             # get the object information
             objectinfo = yield self.executor.submit(
                 worker_get_object,
+                self.current_user['user_id'],
                 objindex,
                 self.basedir,
-                [x.strip() for x in
-                 self.siteinfo['good_flag_keys'].split(',')],
-                self.siteinfo['max_good_votes'],
-                [x.strip() for x in
-                 self.siteinfo['bad_flag_keys'].split(',')],
-                self.siteinfo['max_bad_votes'],
             )
 
             if objectinfo is not None:
@@ -859,20 +698,16 @@ class SaveObjectHandler(BaseHandler):
                 # check if the user is allowed to comment on this object
                 objectinfo = yield self.executor.submit(
                     worker_get_object,
+                    self.current_user['user_id'],
                     objectid,
                     self.basedir,
-                    [x.strip() for x in
-                     self.siteinfo['good_flag_keys'].split(',')],
-                    self.siteinfo['max_good_votes'],
-                    [x.strip() for x in
-                     self.siteinfo['bad_flag_keys'].split(',')],
-                    self.siteinfo['max_bad_votes'],
                 )
 
                 # if this object actually exists and is writable, we can do
                 # stuff on it
                 if (objectinfo is not None and
-                    objectinfo['review_status'] == 'incomplete'):
+                    objectinfo['review_status'] == 'incomplete' and
+                    objectinfo['already_reviewed'] is False):
 
                     commentdict = {'objectid':objectid,
                                    'comment':comment_text,
@@ -883,6 +718,12 @@ class SaveObjectHandler(BaseHandler):
                         userid,
                         username,
                         commentdict,
+                        [x.strip() for x in
+                         self.siteinfo['good_flag_keys'].split(',')],
+                        self.siteinfo['max_good_votes'],
+                        [x.strip() for x in
+                         self.siteinfo['bad_flag_keys'].split(',')],
+                        self.siteinfo['max_bad_votes'],
                     )
 
                     if updated is not None:
@@ -906,6 +747,17 @@ class SaveObjectHandler(BaseHandler):
                         self.write(retdict)
                         self.finish()
 
+                elif (objectinfo is not None and
+                      objectinfo['already_reviewed'] is True):
+
+                    retdict = {'status':'failed',
+                               'message':(
+                                   "You have already reviewed this object."
+                               ),
+                               'result':None}
+                    self.write(retdict)
+                    self.finish()
+
                 else:
 
                     retdict = {'status':'failed',
@@ -915,7 +767,7 @@ class SaveObjectHandler(BaseHandler):
                                ),
                                'result':None}
                     self.write(retdict)
-                    raise web.Finish()
+                    self.finish()
 
             # if no comment text was supplied, do nothing
             else:
@@ -936,388 +788,5 @@ class SaveObjectHandler(BaseHandler):
             retdict = {'status':'failed',
                        'message':'Invalid save request for object ID',
                        'result':None}
-            self.write(retdict)
-            self.finish()
-
-
-class ReviewAssignmentHandler(BaseHandler):
-    '''
-    This handles /api/review-assign.
-
-    '''
-
-    def initialize(self,
-                   fernetkey,
-                   executor,
-                   authnzerver,
-                   basedir,
-                   session_expiry,
-                   siteinfo,
-                   ratelimit,
-                   cachedir):
-        '''
-        This just sets up some stuff.
-
-        '''
-
-        self.authnzerver = authnzerver
-        self.fernetkey = fernetkey
-        self.ferneter = Fernet(fernetkey)
-        self.executor = executor
-        self.session_expiry = session_expiry
-        self.httpclient = AsyncHTTPClient(force_instance=True)
-        self.siteinfo = siteinfo
-        self.ratelimit = ratelimit
-        self.cachedir = cachedir
-        self.basedir = basedir
-
-        # initialize this to None
-        # we'll set this later in self.prepare()
-        self.current_user = None
-
-        # apikey verification info
-        self.apikey_verified = False
-        self.apikey_info = None
-
-    @gen.coroutine
-    def get(self):
-        '''
-        This gets the lists of assigned or unassigned objects for review.
-
-        '''
-
-        if not self.current_user:
-            self.redirect('/users/login')
-
-        current_user = self.current_user
-
-        # only allow in superuser roles
-        if current_user and current_user['user_role'] == 'superuser':
-
-            try:
-
-                # ask the authnzerver for a user list
-                reqtype = 'user-list'
-                reqbody = {'user_id': None}
-
-                ok, resp, msgs = yield self.authnzerver_request(
-                    reqtype, reqbody
-                )
-
-                if not ok:
-
-                    LOGGER.error('no user list returned from authnzerver')
-                    user_list = []
-
-                else:
-                    user_list = [
-                        x['user_id'] for x in resp['user_info'] if
-                        x['user_id'] not in (2,3)
-                    ]
-
-                list_type = xhtml_escape(
-                    self.get_argument('list','unassigned')
-                )
-
-                keytype = xhtml_escape(self.get_argument('keytype', 'start'))
-                keyid = int(
-                    xhtml_escape(self.get_argument('keyid', '1'))
-                )
-                max_objects = self.siteinfo['rows_per_page']
-                get_user_id = self.get_argument('user_id', 'all')
-
-                if get_user_id.strip() != 'all':
-                    get_user_id = int(xhtml_escape(get_user_id.strip()))
-                    if get_user_id not in user_list:
-                        get_user_id = None
-
-                else:
-                    get_user_id = None
-
-                # getting unassigned objects
-                if list_type == 'unassigned':
-
-                    if keytype.strip() == 'start':
-
-                        # get the review assignments
-                        reviewlist_info = yield self.executor.submit(
-                            worker_list_review_assignments,
-                            list_type='unassigned',
-                            start_keyid=keyid,
-                            end_keyid=None,
-                            max_objects=max_objects,
-                        )
-
-                    elif keytype.strip() == 'end':
-
-                        reviewlist_info = yield self.executor.submit(
-                            worker_list_review_assignments,
-                            list_type='unassigned',
-                            start_keyid=None,
-                            end_keyid=keyid,
-                            max_objects=max_objects,
-                        )
-
-                    else:
-
-                        reviewlist_info = yield self.executor.submit(
-                            worker_list_review_assignments,
-                            list_type='unassigned',
-                            start_keyid=None,
-                            end_keyid=keyid,
-                            max_objects=max_objects,
-                        )
-
-                # for assigned objects, we'll do it per user
-                elif list_type == 'assigned' and get_user_id is None:
-
-                    reviewlist_info = {}
-
-                    for userid in user_list:
-
-                        if keytype.strip() == 'start':
-
-                            # get the review assignments
-                            reviewlist_info[userid] = (
-                                yield self.executor.submit(
-                                    worker_list_review_assignments,
-                                    list_type='assigned',
-                                    start_keyid=keyid,
-                                    end_keyid=None,
-                                    max_objects=max_objects,
-                                    user_id=userid,
-                                )
-                            )
-
-                        elif keytype.strip() == 'end':
-
-                            reviewlist_info[userid] = (
-                                yield self.executor.submit(
-                                    worker_list_review_assignments,
-                                    list_type='assigned',
-                                    start_keyid=None,
-                                    end_keyid=keyid,
-                                    max_objects=max_objects,
-                                    user_id=userid,
-                                )
-                            )
-
-                        else:
-
-                            reviewlist_info[userid] = (
-                                yield self.executor.submit(
-                                    worker_list_review_assignments,
-                                    list_type='assigned',
-                                    start_keyid=None,
-                                    end_keyid=keyid,
-                                    max_objects=max_objects,
-                                    user_id=userid,
-                                )
-                            )
-
-                # for assigned objects and a single user
-                elif list_type == 'assigned' and get_user_id is not None:
-
-                    reviewlist_info = {}
-
-                    if keytype.strip() == 'start':
-
-                        # get the review assignments
-                        reviewlist_info[get_user_id] = (
-                            yield self.executor.submit(
-                                worker_list_review_assignments,
-                                list_type='assigned',
-                                start_keyid=keyid,
-                                end_keyid=None,
-                                max_objects=max_objects,
-                                user_id=get_user_id,
-                            )
-                        )
-
-                    elif keytype.strip() == 'end':
-
-                        reviewlist_info[get_user_id] = (
-                            yield self.executor.submit(
-                                worker_list_review_assignments,
-                                list_type='assigned',
-                                start_keyid=None,
-                                end_keyid=keyid,
-                                max_objects=max_objects,
-                                user_id=get_user_id,
-                            )
-                        )
-
-                    else:
-
-                        reviewlist_info[get_user_id] = (
-                            yield self.executor.submit(
-                                worker_list_review_assignments,
-                                list_type='assigned',
-                                start_keyid=None,
-                                end_keyid=keyid,
-                                max_objects=max_objects,
-                                user_id=get_user_id,
-                            )
-                        )
-
-                if reviewlist_info is not None:
-
-                    retdict = {'status':'ok',
-                               'message':'objectlist OK',
-                               'result':reviewlist_info}
-
-                else:
-
-                    retdict = {'status':'failed',
-                               'message':"Unable to retrieve object list.",
-                               'result':None}
-
-                self.write(retdict)
-                self.finish()
-
-            except Exception:
-
-                LOGGER.exception("Failed to list assignments")
-                self.set_status(400)
-                retdict = {
-                    'status':'failed',
-                    'result':None,
-                    'message':("Sorry, could not list assignments.")
-                }
-                self.write(retdict)
-                self.finish()
-
-        # anything else is not allowed, turn them away
-        else:
-            self.set_status(403)
-            retdict = {
-                'status':'failed',
-                'result':None,
-                'message':("Sorry, you don't have access. "
-                           "API keys are not allowed for this endpoint.")
-            }
-            self.write(retdict)
-            self.finish()
-
-    @gen.coroutine
-    def post(self):
-        '''This handles the POST to /api/review-assign.
-
-        '''
-        if not self.current_user:
-            self.redirect('/')
-
-        if ((not self.keycheck['status'] == 'ok') or
-            (not self.xsrf_type == 'session')):
-
-            self.set_status(403)
-            retdict = {
-                'status':'failed',
-                'result':None,
-                'message':("Sorry, you don't have access. "
-                           "API keys are not allowed for this endpoint.")
-            }
-            self.write(retdict)
-            raise web.Finish()
-
-        # get the current user
-        current_user = self.current_user
-
-        # only allow in superuser roles
-        if current_user and current_user['user_role'] == 'superuser':
-
-            try:
-
-                target_userid = int(
-                    xhtml_escape(self.get_argument('userid',None))
-                )
-                target_objectlist = json.loads(
-                    self.get_argument('assigned_objects',None)
-                )
-                target_objectlist = [int(x) for x in target_objectlist]
-
-                do_unassign_flag = int(
-                    xhtml_escape(self.get_argument('unassign_flag','0'))
-                )
-
-                # this is the normal assign mode
-                if do_unassign_flag == 0:
-
-                    # get the review assignments
-                    assigned_ok = yield self.executor.submit(
-                        worker_assign_reviewer,
-                        target_userid,
-                        target_objectlist,
-                        do_unassign=False,
-                    )
-
-                    if assigned_ok:
-
-                        retdict = {'status':'ok',
-                                   'message':'objects assigned OK',
-                                   'result':assigned_ok}
-
-                    else:
-
-                        retdict = {
-                            'status':'failed',
-                            'message':"Unable to assign objects to reviewer.",
-                            'result':None
-                        }
-
-                    self.write(retdict)
-                    self.finish()
-
-                # otherwise, we're doing unassigning of objects for a user
-                else:
-
-                    # get the review assignments
-                    unassigned_ok = yield self.executor.submit(
-                        worker_assign_reviewer,
-                        target_userid,
-                        target_objectlist,
-                        do_unassign=True,
-                    )
-
-                    if unassigned_ok:
-
-                        retdict = {'status':'ok',
-                                   'message':'objects unassigned OK',
-                                   'result':unassigned_ok}
-
-                    else:
-
-                        retdict = {
-                            'status':'failed',
-                            'message':(
-                                "Unable to unassign objects from reviewer."
-                            ),
-                            'result': None
-                        }
-
-                    self.write(retdict)
-                    self.finish()
-
-            except Exception:
-
-                LOGGER.exception("Failed to understand request.")
-                self.set_status(400)
-                retdict = {
-                    'status':'failed',
-                    'result':None,
-                    'message':("Unknown or invalid arguments provided.")
-                }
-                self.write(retdict)
-                self.finish()
-
-        else:
-
-            self.set_status(403)
-            retdict = {
-                'status':'failed',
-                'result':None,
-                'message':("Sorry, you don't have access. "
-                           "API keys are not allowed for this endpoint.")
-            }
             self.write(retdict)
             self.finish()
