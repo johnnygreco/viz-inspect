@@ -398,7 +398,7 @@ def main():
             set_flag_keys = options.flagkeys
         else:
             set_flag_keys = flag_keys
-            SITEINFO['flag_keys'] = set_flag_keys
+        SITEINFO['flag_keys'] = set_flag_keys
 
         # 0a. confirm the good flags
         LOGGER.info("Which object flags are associated with 'good' objects?")
@@ -407,7 +407,7 @@ def main():
             set_good_flag_keys = 'galaxy, candy'
         else:
             set_good_flag_keys = good_flag_keys
-            SITEINFO['good_flag_keys'] = set_good_flag_keys
+        SITEINFO['good_flag_keys'] = set_good_flag_keys
 
         # 0b. confirm the bad flags
         LOGGER.info("Which object flags are associated with 'bad' objects?")
@@ -416,7 +416,7 @@ def main():
             set_bad_flag_keys = 'cirrus, junk'
         else:
             set_bad_flag_keys = bad_flag_keys
-            SITEINFO['bad_flag_keys'] = set_bad_flag_keys
+        SITEINFO['bad_flag_keys'] = set_bad_flag_keys
 
         # 0c. confirm how many good flags are needed for object completion
         LOGGER.info("How many votes for 'good' flags are required to mark an "
@@ -428,7 +428,7 @@ def main():
             set_max_good_votes = int(max_good_votes)
             if set_max_good_votes <= 0:
                 set_max_good_votes = 2
-            SITEINFO['max_good_votes'] = set_max_good_votes
+        SITEINFO['max_good_votes'] = set_max_good_votes
 
         # 0c. confirm how many bad flags are needed for object completion
         LOGGER.info("How many votes for 'bad' flags are required to mark an "
@@ -440,7 +440,7 @@ def main():
             set_max_bad_votes = int(max_bad_votes)
             if set_max_bad_votes <= 0:
                 set_max_bad_votes = 2
-            SITEINFO['max_bad_votes'] = set_max_bad_votes
+        SITEINFO['max_bad_votes'] = set_max_bad_votes
 
         # 1. check if the --catalogcsv arg is present
         if (options.catalogcsv is not None and
