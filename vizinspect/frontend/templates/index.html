@@ -102,6 +102,44 @@
         </div>
       </div>
 
+      <!-- control row -->
+      <!-- this contains the source index and notes -->
+      <form id="comment-form" method="post">
+        {% module xsrf_form_html() %}
+        <div class="row" >
+
+          <div class="col-sm-12 col-md-7" >
+
+            <div class="form-group">
+              <label for="object-notes">Type in any notes below, then click a flag button to jump to the next object.</label>
+              <textarea class="form-control" id="object-notes" rows="5"
+                        placeholder="Notes for this object go here. Markdown formatting is supported. ADS bibcodes and most DOIs will be automatically linkified.">
+              </textarea>
+            </div>
+
+          </div>
+          <div class="col-sm-12 col-md-5" >
+
+            <div class="row">
+              <div class="col-12">
+                <div id="flag-button-group-1" class="mt-2 d-flex">
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-12">
+                <div id="flag-button-group-2" class="mt-2 d-flex">
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </form>
+
       <!-- this contains the info on the current object -->
       <div class="row">
         <div class="col-12" >
@@ -131,59 +169,6 @@
           </table>
         </div>
       </div>
-
-      <!-- control row -->
-      <!-- this contains the source index and notes -->
-      <form id="comment-form" method="post">
-        {% module xsrf_form_html() %}
-        <div class="row" >
-
-          <div class="col-sm-12 col-md-5" >
-
-            <div class="row">
-              <div class="col-12">
-                <div id="flag-button-group-1" class="mt-2 d-flex">
-                </div>
-              </div>
-            </div>
-
-            <div class="row">
-              <div class="col-12">
-                <div id="flag-button-group-2" class="mt-2 d-flex">
-                </div>
-              </div>
-            </div>
-
-            <div class="custom-control custom-checkbox mb-4">
-              <input type="checkbox" class="custom-control-input" id="pref-autosave-next">
-              <label class="custom-control-label" for="pref-autosave-next">
-                Save &amp; jump to next object when flag is set
-              </label>
-            </div>
-
-
-          </div>
-
-          <div class="col-sm-12 col-md-7" >
-
-            <div class="form-group">
-              <label for="object-notes">Notes on this object</label>
-              <textarea class="form-control" id="object-notes" rows="5"
-                        placeholder="Notes for this object go here. Markdown formatting is supported. ADS bibcodes and most DOIs will be automatically linkified.">
-              </textarea>
-            </div>
-
-            <button type="submit" class="btn btn-success"
-                    id="save-current-object">
-              Save notes and classification
-            </button>
-
-          </div>
-
-        </div>
-
-      </form>
-
 
       <!-- this contains the extra columns -->
       <div class="row mt-4" >

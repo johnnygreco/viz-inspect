@@ -280,27 +280,6 @@ var ui = {
     // USER PREFS BINDINGS //
     /////////////////////////
 
-    // bind the cookie setters
-    $('#pref-autosave-next').on('click', function(evt) {
-
-      let autojump = $(this).prop('checked');
-
-      // get the previous cookie settings
-      let prefs = ui.load_cookie_prefs();
-
-      if (prefs !== undefined) {
-        prefs.autosave_jump = autojump;
-      }
-      else {
-        prefs = { autosave_jump: autojump };
-      }
-
-      // set the prefs
-      ui.prefs = prefs;
-      Cookies.set('vizinspect_prefs', prefs);
-
-    });
-
     // delete the API key on session end
     $('#user-logout-form').on('submit', function(evt) {
       localStorage.clear();
@@ -564,20 +543,17 @@ var ui = {
     //////////////////////////////////
 
     // bind the click event for the flag buttons
+    // we now always jump to the next object on clicking a button
     $('#comment-form').on('click', '.object-flags-button', function (evt) {
 
-      if (ui.prefs.autosave_jump !== undefined && ui.prefs.autosave_jump === true) {
+      // set the state of this button
+      $(this).attr('data-state','active');
 
-        // set the state of this button
-        $(this).attr('data-state','active');
+      // get the current objectid
+      let this_objectid = review.current_objectid;
 
-        // get the current objectid
-        let this_objectid = review.current_objectid;
-
-        // fire the save object handler
-        ui.debounce(review.save_object_comments_flags(this_objectid, true), 200);
-
-      }
+      // fire the save object handler
+      ui.debounce(review.save_object_comments_flags(this_objectid, true), 200);
 
     });
 
@@ -878,11 +854,8 @@ var review = {
               color = 'danger';
             }
 
-            let checked = objectinfo.user_flags[item];
+            // the buttons are always loaded in inactive state
             let button_activated = '';
-            if (checked) {
-              button_activated = 'active';
-            }
             let button_disabled = '';
 
             if (review.current_readonly) {
@@ -913,11 +886,8 @@ ${item}
               color = 'dark';
             }
 
-            let checked = objectinfo.user_flags[item];
+            // the buttons are always loaded in inactive state
             let button_activated = '';
-            if (checked) {
-              button_activated = 'active';
-            }
             let button_disabled = '';
 
             if (review.current_readonly) {
@@ -1096,7 +1066,8 @@ ${item}
     // get the flags
     let object_flags = {};
     for (let item of $('.object-flags-button')) {
-      if (item.dataset.state == 'active' || item.className.indexOf('active') != -1) {
+      if (item.dataset.state == 'active' ||
+          item.className.indexOf('active') != -1) {
         object_flags[item.dataset.value] = true;
       }
 

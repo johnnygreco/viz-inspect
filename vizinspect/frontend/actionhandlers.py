@@ -12,7 +12,6 @@ These are Tornado handlers for the AJAX actions.
 ####################
 
 import logging
-import multiprocessing as mp
 import json
 from datetime import datetime
 
@@ -78,250 +77,12 @@ from tornado import web
 ###################
 
 from .basehandler import BaseHandler
-from ..backend import catalogs
 
-
-######################
-## WORKER FUNCTIONS ##
-######################
-
-def worker_get_object(
-        userid,
-        objectid,
-        basedir,
-        override_dbinfo=None,
-        override_client=None,
-        raiseonfail=False,
-):
-    '''
-    This does the actual work of loading the object.
-
-    Runs in an executor.
-
-    - gets the object from the catalog CSV
-    - gets the object's comments from the comments CSV
-
-    '''
-
-    try:
-
-        if not override_dbinfo:
-            currproc = mp.current_process()
-            conn, meta = currproc.connection, currproc.metadata
-        else:
-            conn, meta = override_dbinfo
-
-        # this returns a list of objectinfo rows
-        # one row per entry in the comments table for this object
-        # we'll reform everything to a single dict suitable for JSON output
-        # and turn the comments into a row of dicts per commenter
-        objectinfo = catalogs.get_object(objectid,
-                                         (conn, meta))
-
-        comments = [
-            {'comment_added_on':x['comment_added_on'],
-             'comment_by_userid':x['comment_by_userid'],
-             'comment_by_username':x['comment_by_username'],
-             'comment_userset_flags':x['comment_userset_flags'],
-             'comment_text':x['comment_text']} for x in objectinfo
-            if x['comment_added_on'] is not None
-        ]
-
-        comments = sorted(
-            comments,
-            key=lambda x: (
-                x['comment_added_on'] if x['comment_added_on'] else ''
-            ),
-            reverse=True
-        )
-
-        already_reviewed = (
-            userid in (comment['comment_by_userid'] for comment in comments)
-        )
-
-        # we return a single dict with all of the object info collapsed into it
-        objectinfo_dict = objectinfo[0]
-        del objectinfo_dict['comment_added_on']
-        del objectinfo_dict['comment_by_userid']
-        del objectinfo_dict['comment_by_username']
-        del objectinfo_dict['comment_userset_flags']
-        del objectinfo_dict['comment_text']
-
-        # this is the dict we return
-        retdict = {
-            'info': objectinfo_dict,
-            'comments':comments,
-            'review_status':objectinfo_dict['review_status'],
-            'already_reviewed':already_reviewed
-        }
-
-        return retdict
-
-    except Exception:
-        LOGGER.exception("Could not get info for object: %s" % objectid)
-        if raiseonfail:
-            raise
-
-        return None
-
-
-def worker_get_objects(
-        review_status='all',
-        userid=None,
-        start_keyid=1,
-        end_keyid=None,
-        max_objects=100,
-        override_dbinfo=None,
-        raiseonfail=False,
-):
-    '''
-    This returns the full object list.
-
-    '''
-
-    try:
-
-        if not override_dbinfo:
-            currproc = mp.current_process()
-            conn, meta = currproc.connection, currproc.metadata
-        else:
-            conn, meta = override_dbinfo
-
-        if review_status == 'all':
-            check_review_status = 'all'
-            userid_check = None
-        elif review_status == 'incomplete':
-            check_review_status = 'incomplete'
-            userid_check = None
-        elif review_status == 'complete-good':
-            check_review_status = 'complete-good'
-            userid_check = None
-        elif review_status == 'complete-bad':
-            check_review_status = 'complete-bad'
-            userid_check = None
-
-        elif review_status == 'self-all' and userid is not None:
-            check_review_status = 'all'
-            userid_check = (userid, 'include')
-        elif review_status == 'self-incomplete' and userid is not None:
-            check_review_status = 'incomplete'
-            userid_check = (userid, 'include')
-        elif review_status == 'self-complete-good' and userid is not None:
-            check_review_status = 'complete-good'
-            userid_check = (userid, 'include')
-        elif review_status == 'self-complete-bad' and userid is not None:
-            check_review_status = 'self-complete-bad'
-            userid_check = (userid, 'include')
-
-        elif review_status == 'other-all' and userid is not None:
-            check_review_status = 'all'
-            userid_check = (userid, 'exclude')
-        elif review_status == 'other-incomplete' and userid is not None:
-            check_review_status = 'incomplete'
-            userid_check = (userid, 'exclude')
-        elif review_status == 'other-complete-good' and userid is not None:
-            check_review_status = 'complete-good'
-            userid_check = (userid, 'exclude')
-        elif review_status == 'other-complete-bad' and userid is not None:
-            check_review_status = 'other-complete-bad'
-            userid_check = (userid, 'exclude')
-
-        # figure out the page slices by looking up the object count
-        list_count = catalogs.get_object_count(
-            (conn, meta),
-            userid_check=userid_check,
-            review_status=review_status,
-        )
-        if (list_count % max_objects):
-            n_pages = int(list_count/max_objects) + 1
-        else:
-            n_pages = int(list_count/max_objects)
-
-        # this returns a list of tuples (keyid, objectid)
-        objectlist, ret_start_keyid, ret_end_keyid, revorder = (
-            catalogs.get_objects(
-                (conn, meta),
-                userid_check=userid_check,
-                review_status=check_review_status,
-                start_keyid=start_keyid,
-                end_keyid=end_keyid,
-                max_objects=max_objects,
-                getinfo='objectids',
-                fast_fetch=True
-            )
-        )
-
-        # reform to a single list
-        returned_objectlist = sorted(list({x[1] for x in objectlist}))
-
-        # this is the dict we return
-        retdict = {
-            'objectlist': returned_objectlist,
-            'start_keyid':ret_start_keyid,
-            'end_keyid':ret_end_keyid,
-            'object_count':list_count,
-            'rows_per_page':max_objects,
-            'n_pages':n_pages,
-        }
-
-        return retdict
-
-    except Exception:
-        LOGGER.exception("Could not get object list.")
-        if raiseonfail:
-            raise
-
-        return None
-
-
-def worker_insert_object_comments(
-        userid,
-        username,
-        comments,
-        good_flags,
-        max_good_votes,
-        bad_flags,
-        max_bad_votes,
-        override_dbinfo=None,
-        raiseonfail=False,
-):
-    '''
-    This inserts object comments.
-
-    '''
-
-    try:
-
-        if not override_dbinfo:
-            currproc = mp.current_process()
-            conn, meta = currproc.connection, currproc.metadata
-        else:
-            conn, meta = override_dbinfo
-
-        # this returns a list of dicts {'objectid': <objectid>}
-        updated = catalogs.insert_object_comments(
-            userid,
-            comments,
-            (conn, meta),
-            good_flags,
-            max_good_votes,
-            bad_flags,
-            max_bad_votes,
-            username=username,
-        )
-
-        # this is the dict we return
-        retdict = {
-            'updated': updated == 1,
-        }
-
-        return retdict
-
-    except Exception:
-        LOGGER.exception("Could not insert the comments into the DB.")
-        if raiseonfail:
-            raise
-        return None
+from .actionworkers import (
+    worker_get_object,
+    worker_get_objects,
+    worker_insert_object_comments,
+)
 
 
 #####################
@@ -379,6 +140,12 @@ class ObjectListHandler(BaseHandler):
             - 'complete-good' -> objects that have at least 2 'good' votes
             - 'complete-bad' -> objects that have at least 2 'bad' votes
             - 'incomplete' -> objects that don't have 2 votes either way
+            - 'self-complete-good' -> this user's voted objects good-complete
+            - 'self-complete-bad' -> this user's voted objects bad-complete
+            - 'self-incomplete' -> this user's voted objects incomplete
+            - 'other-complete-good' -> other users' voted objects good-complete
+            - 'other-complete-bad' -> other users' voted objects bad-complete
+            - 'other-incomplete' -> other users' voted objects incomplete
 
         page : int, optional, default = 0
            The page number to retrieve.
@@ -416,11 +183,9 @@ class ObjectListHandler(BaseHandler):
                                      'incomplete',
                                      'complete-good',
                                      'complete-bad',
-                                     'self-all',
                                      'self-incomplete',
                                      'self-complete-good',
                                      'self-complete-bad',
-                                     'other-all',
                                      'other-incomplete',
                                      'other-complete-good',
                                      'other-complete-bad'):
@@ -437,8 +202,8 @@ class ObjectListHandler(BaseHandler):
 
                 objectlist_info = yield self.executor.submit(
                     worker_get_objects,
-                    userid=self.current_user['user_id'],
                     review_status=review_status,
+                    userid=self.current_user['user_id'],
                     start_keyid=keyid,
                     end_keyid=None,
                     max_objects=max_objects,
@@ -448,8 +213,8 @@ class ObjectListHandler(BaseHandler):
 
                 objectlist_info = yield self.executor.submit(
                     worker_get_objects,
-                    userid=self.current_user['user_id'],
                     review_status=review_status,
+                    userid=self.current_user['user_id'],
                     start_keyid=None,
                     end_keyid=keyid,
                     max_objects=max_objects,
@@ -459,8 +224,8 @@ class ObjectListHandler(BaseHandler):
 
                 objectlist_info = yield self.executor.submit(
                     worker_get_objects,
-                    userid=self.current_user['user_id'],
                     review_status=review_status,
+                    userid=self.current_user['user_id'],
                     start_keyid=keyid,
                     end_keyid=None,
                     max_objects=max_objects,
@@ -565,11 +330,6 @@ class LoadObjectHandler(BaseHandler):
             if objindex < 0:
                 objindex = 0
 
-            # if there's an argument saying to make plots of neighbors
-            neighborhood = self.get_argument('neighborhood', None)
-            if neighborhood:
-                neighborhood = json.loads(neighborhood)
-
             # get the object information
             objectinfo = yield self.executor.submit(
                 worker_get_object,
@@ -579,13 +339,11 @@ class LoadObjectHandler(BaseHandler):
             )
 
             if objectinfo is not None:
-
                 retdict = {'status':'ok',
                            'message':'object found OK',
                            'result':objectinfo}
 
             else:
-
                 retdict = {'status':'failed',
                            'message':"Object with specified ID not found.",
                            'result':None}
@@ -690,6 +448,24 @@ class SaveObjectHandler(BaseHandler):
             userid = self.current_user['user_id']
             username = self.current_user['full_name']
 
+            # check if there's more than one flag selected
+            user_flags = json.loads(user_flags)
+            if sum(user_flags[k] for k in user_flags) > 1:
+                LOGGER.error(
+                    "More than one flag is selected for "
+                    "object: %s, userid: %s" %
+                    (objectid, self.current_user['user_id'])
+                )
+                retdict = {
+                    'status':'failed',
+                    'result':None,
+                    'message':(
+                        "You can't choose more than one flag per object."
+                    )
+                }
+                self.write(retdict)
+                raise web.Finish()
+
             if comment_text is not None and len(comment_text.strip()) == 0:
                 comment_text = ''
 
@@ -705,13 +481,44 @@ class SaveObjectHandler(BaseHandler):
 
                 # if this object actually exists and is writable, we can do
                 # stuff on it
-                if (objectinfo is not None and
-                    objectinfo['review_status'] == 'incomplete' and
-                    objectinfo['already_reviewed'] is False):
+
+                if (objectinfo is None):
+                    LOGGER.error("Object: %s doesn't exist (userid: %s)" %
+                                 (objectid, self.current_user['user_id']))
+                    retdict = {
+                        'status':'failed',
+                        'result':None,
+                        'message':(
+                            "You can't choose more than one flag per object."
+                        )
+                    }
+                    self.write(retdict)
+                    self.finish()
+
+                elif (objectinfo is not None and
+                      objectinfo['already_reviewed'] is True):
+
+                    LOGGER.error(
+                        "Object: %s has been already reviewed by userid: %s" %
+                        (objectid, self.current_user['user_id'])
+                    )
+                    retdict = {
+                        'status':'failed',
+                        'result':None,
+                        'message':(
+                            "You have already reviewed this object."
+                        )
+                    }
+                    self.write(retdict)
+                    self.finish()
+
+                elif (objectinfo is not None and
+                      objectinfo['already_reviewed'] is False and
+                      objectinfo['review_status'] == 'incomplete'):
 
                     commentdict = {'objectid':objectid,
                                    'comment':comment_text,
-                                   'user_flags':json.loads(user_flags)}
+                                   'user_flags':user_flags}
 
                     updated = yield self.executor.submit(
                         worker_insert_object_comments,
@@ -724,6 +531,7 @@ class SaveObjectHandler(BaseHandler):
                         [x.strip() for x in
                          self.siteinfo['bad_flag_keys'].split(',')],
                         self.siteinfo['max_bad_votes'],
+                        self.siteinfo['max_all_votes'],
                     )
 
                     if updated is not None:
@@ -731,6 +539,15 @@ class SaveObjectHandler(BaseHandler):
                         retdict = {'status':'ok',
                                    'message':'object updated OK',
                                    'result':updated}
+
+                        LOGGER.info(
+                            "Object: %s successfully "
+                            "reviewed by userid: %s: %r" %
+                            (objectid,
+                             self.current_user['user_id'],
+                             commentdict)
+                        )
+
                         self.write(retdict)
                         self.finish()
 
@@ -747,17 +564,6 @@ class SaveObjectHandler(BaseHandler):
                         self.write(retdict)
                         self.finish()
 
-                elif (objectinfo is not None and
-                      objectinfo['already_reviewed'] is True):
-
-                    retdict = {'status':'failed',
-                               'message':(
-                                   "You have already reviewed this object."
-                               ),
-                               'result':None}
-                    self.write(retdict)
-                    self.finish()
-
                 else:
 
                     retdict = {'status':'failed',
@@ -769,7 +575,7 @@ class SaveObjectHandler(BaseHandler):
                     self.write(retdict)
                     self.finish()
 
-            # if no comment text was supplied, do nothing
+            # if no comment content was supplied, do nothing
             else:
 
                 retdict = {

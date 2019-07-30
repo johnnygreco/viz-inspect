@@ -15,16 +15,7 @@
   <ul class="nav nav-tabs mt-2" id="admin-tabs" role="tablist">
 
     <li class="nav-item">
-      <a class="nav-link active" id="review-assignments-tab"
-         data-toggle="tab" href="#review-assignments"
-         role="tab" aria-controls="review-assignments"
-         aria-selected="false">
-        Object review assignments
-      </a>
-    </li>
-
-    <li class="nav-item">
-      <a class="nav-link" id="email-settings-tab"
+      <a class="nav-link active" id="email-settings-tab"
          data-toggle="tab" href="#email-settings"
          role="tab" aria-controls="email-settings"
          aria-selected="true">
@@ -46,198 +37,9 @@
 
   <div class="tab-content" id="admin-tab-content">
 
-    <!-- review assignments tab -->
-
-    <div class="tab-pane show active"
-         id="review-assignments" role="tabpanel"
-         aria-labelledby="review-assignments-tab">
-
-      <div class="row" >
-
-        <!-- list all of the objects in a multi-select -->
-        <div class="col-sm-12 col-md-6" >
-
-          <form class="mt-4" action="/admin/review-assign" method="post"
-                id="admin-review-assign-update-form">
-            {% module xsrf_form_html() %}
-
-            <fieldset>
-              <legend>Currently unassigned objects <span id="spinner-block"></span></legend>
-
-              <div class="row justify-content-between mb-2" >
-
-                <div class="col-2 d-flex justify-content-start" >
-                  <button type="button"
-                          class="btn btn-outline-info btn-sm"
-                          id="prev-list-page-unassigned">
-                    &larr; prev
-                  </button>
-                </div>
-
-                <div class="col-6 d-flex justify-content-center align-items-center" >
-
-                  Page&nbsp;
-                  <span id="current-list-page-unassigned"></span>
-                  &nbsp;
-                  of
-                  &nbsp;
-                  <span id="current-list-npages-unassigned"></span>
-
-                </div>
-
-                <div class="col-2 d-flex justify-content-end" >
-                  <button type="button"
-                          class="btn btn-outline-info btn-sm"
-                          id="next-list-page-unassigned">
-                    next &rarr;
-                  </button>
-                </div>
-
-              </div>
-
-              <div class="form-group">
-                <select id="objectid-reviewlist" class="custom-select" size="20" multiple>
-                </select>
-                <small class="form-text text-muted">
-                  Select multiple objects by holding the
-                  <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> or <kbd>Shift</kbd> key
-                  when clicking.
-                </small>
-              </div>
-
-              <div class="form-row align-items-center">
-
-                <div class="col-5" >
-                  <label class="col-form-label" for="assign-objects-userid">
-                    Assign selected objects to
-                  </label>
-                </div>
-
-                <div class="col" >
-                  <input type="text" class="form-control"
-                         id="assign-objects-userid"
-                         placeholder="User ID"
-                         minlength="5" maxlength="1024"
-                         required>
-                </div>
-
-                <div class="col" >
-                  <button type="submit" class="btn btn-primary" id="review-assign-objects" >
-                    Assign objects
-                  </button>
-                </div>
-
-              </div>
-            </fieldset>
-
-          </form>
-
-        </div>
-
-        <!-- list all the users and their assigned objects -->
-        <div class="col-sm-12 col-md-6" >
-
-          <form class="mt-4" action="/admin/review-assign" method="post"
-                id="admin-review-assign-update-form">
-            {% module xsrf_form_html() %}
-
-            {% for item in userlist %}
-
-            {% if item['user_id'] not in (2,3) %}
-            <div class="row mb-4" >
-              <div class="col-12" >
-
-                <h3>User ID: {{ item['user_id'] }}</h3>
-
-                <table class="table table-hover table-sm">
-
-                  <tr>
-                    <th scope="row">User name</th>
-                    <td class="assign-username-label"
-                        data-userid="{{ item['user_id'] }}">
-                      {{ item['full_name'] or '' }}
-                    </td>
-                  </tr>
-
-                  <tr>
-                    <th scope="row">Email address</th>
-                    <td class="assign-useremail-label"
-                        data-userid="{{ item['user_id'] }}">
-                      {{ item['email'] }}
-                    </td>
-                  </tr>
-
-                </table>
-
-                <fieldset>
-                  <legend>Currently assigned objects</legend>
-                  <div class="row justify-content-between mb-2" >
-
-                    <div class="col-2 d-flex justify-content-start" >
-                      <button type="button"
-                              class="btn btn-outline-info btn-sm prev-list-page-assigned"
-                              data-userid="{{ item['user_id'] }}">
-                        &larr; prev
-                      </button>
-                    </div>
-
-                    <div class="col-6 d-flex justify-content-center align-items-center" >
-
-                      Page&nbsp;
-                      <span class="current-list-page-assigned" data-userid="{{ item['user_id'] }}"></span>
-                      &nbsp;
-                      of
-                      &nbsp;
-                      <span class="current-list-npages-assigned" data-userid="{{ item['user_id'] }}"></span>
-
-                    </div>
-
-                    <div class="col-2 d-flex justify-content-end" >
-                      <button type="button"
-                              class="btn btn-outline-info btn-sm next-list-page-assigned"
-                              data-userid="{{ item['user_id'] }}">
-                        next &rarr;
-                      </button>
-                    </div>
-
-                  </div>
-
-                  <div class="form-group">
-                    <select data-userid="{{ item['user_id'] }}"
-                            id="assigned-reviewlist-userid-{{ item['user_id'] }}"
-                            class="assigned-reviewlist custom-select" size="8" multiple>
-                    </select>
-                    <small class="form-text text-muted">
-                      Select multiple objects by holding the
-                      <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> or <kbd>Shift</kbd> key
-                      when clicking.
-                    </small>
-                  </div>
-
-                  <button type="submit"
-                          data-userid="{{ item['user_id'] }}"
-                          class="btn btn-outline-danger review-unassign-objects" >
-                    Remove selected objects from review assignment
-                  </button>
-                </fieldset>
-
-              </div>
-            </div>
-
-            {% end %}
-
-            {% end %}
-
-          </form>
-        </div>
-
-      </div>
-
-    </div>
-
     <!-- email settings tab -->
 
-    <div class="tab-pane" id="email-settings"
+    <div class="tab-pane show active" id="email-settings"
          role="tabpanel" aria-labelledby="email-settings-tab">
 
       <form class="mt-2" action="/admin/email"
@@ -527,10 +329,6 @@
 
     // admin action setup
     admin.action_setup();
-
-    // load the unassigned and assigned object lists
-    assignments.review_assignment_list('unassigned', 'start',1, undefined, 0);
-    assignments.review_assignment_list('assigned', 'start', 1, 'all', 0);
 
   });
 </script>
