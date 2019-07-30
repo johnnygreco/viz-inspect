@@ -286,6 +286,7 @@ def worker_insert_object_comments(
         max_good_votes,
         bad_flags,
         max_bad_votes,
+        max_all_votes,
         override_dbinfo=None,
         raiseonfail=False,
 ):
@@ -311,6 +312,7 @@ def worker_insert_object_comments(
             max_good_votes,
             bad_flags,
             max_bad_votes,
+            max_all_votes,
             username=username,
         )
 

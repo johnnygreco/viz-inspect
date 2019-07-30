@@ -531,6 +531,7 @@ class SaveObjectHandler(BaseHandler):
                         [x.strip() for x in
                          self.siteinfo['bad_flag_keys'].split(',')],
                         self.siteinfo['max_bad_votes'],
+                        self.siteinfo['max_all_votes'],
                     )
 
                     if updated is not None:
