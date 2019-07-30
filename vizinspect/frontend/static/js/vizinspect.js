@@ -899,14 +899,14 @@ ${item}
           }
 
           // fill in group 2
-          for (let item of ['tidal', 'halo', 'cirrus']) {
+          for (let item of ['tidal', 'outskirts', 'cirrus']) {
 
             let color = 'info';
 
             if (item == 'tidal') {
               color = 'secondary';
             }
-            else if (item == 'halo') {
+            else if (item == 'outskirts') {
               color = 'warning';
             }
             else if (item == 'cirrus') {
