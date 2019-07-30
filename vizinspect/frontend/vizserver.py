@@ -442,6 +442,18 @@ def main():
                 set_max_bad_votes = 2
         SITEINFO['max_bad_votes'] = set_max_bad_votes
 
+        # 0d. confirm how flags in total are allowed per object
+        LOGGER.info("How many total votes are required to mark an "
+                    "object as complete?")
+        max_all_votes = input("Maximum flag votes [default: 3]: ")
+        if not max_all_votes or len(flag_keys.strip()) == 0:
+            set_max_all_votes = 3
+        else:
+            set_max_all_votes = int(max_all_votes)
+            if set_max_all_votes <= 0:
+                set_max_all_votes = 3
+        SITEINFO['max_all_votes'] = set_max_all_votes
+
         # 1. check if the --catalogcsv arg is present
         if (options.catalogcsv is not None and
             os.path.exists(options.catalogcsv)):

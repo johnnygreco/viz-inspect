@@ -716,15 +716,18 @@ def export_all_objects(outfile,
 ## UPDATING OBJECTS ##
 ######################
 
-def insert_object_comments(userid,
-                           comments,
-                           dbinfo,
-                           good_flags,
-                           max_good_votes,
-                           bad_flags,
-                           max_bad_votes,
-                           username=None,
-                           dbkwargs=None):
+def insert_object_comments(
+        userid,
+        comments,
+        dbinfo,
+        good_flags,
+        max_good_votes,
+        bad_flags,
+        max_bad_votes,
+        max_all_votes,
+        username=None,
+        dbkwargs=None
+):
     '''This inserts a comment for the object.
 
     Markdown is allowed in the comment text. The comment text will be run
@@ -869,13 +872,15 @@ def insert_object_comments(userid,
             # appropriate review_status
             bad_flag_sum = sum(flag_counts[k] for k in bad_flags)
             good_flag_sum = sum(flag_counts[k] for k in good_flags)
+            all_flag_sum = bad_flag_sum + good_flag_sum
 
             if good_flag_sum >= max_good_votes:
                 new_review_status = 'complete-good'
             elif bad_flag_sum >= max_bad_votes:
                 new_review_status = 'complete-bad'
-            elif (bad_flag_sum < max_good_votes and
-                  good_flag_sum < max_bad_votes):
+            elif (all_flag_sum < max_all_votes):
+                new_review_status = 'incomplete'
+            else:
                 new_review_status = 'incomplete'
 
             # update the flags and review status
