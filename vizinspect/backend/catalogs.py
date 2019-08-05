@@ -903,3 +903,125 @@ def insert_object_comments(
         engine.dispose()
 
     return updated
+
+
+def update_vote(
+        userid,
+        dbinfo,
+        objectid,
+        new_vote,
+        good_flags=['candy', 'galaxy'],
+        bad_flags=['cirrus', 'junk', 'outskirts', 'tidal'],
+        max_good_votes=2,
+        max_bad_votes=2,
+        max_all_votes=3,
+        username=None,
+        dbkwargs=None
+):
+
+    dbref, dbmeta = dbinfo
+    if not dbkwargs:
+        dbkwargs = {}
+    if isinstance(dbref, str) and 'postgres' in dbref:
+        if not dbkwargs:
+            dbkwargs = {'engine_kwargs':{'json_serializer':json_dumps}}
+        elif dbkwargs and 'engine_kwargs' not in dbkwargs:
+            dbkwargs['engine_kwargs'] = {'json_serializer':json_dumps}
+        elif dbkwargs and 'engine_kwargs' in dbkwargs:
+            dbkwargs['engine_kwargs'].update({'json_serializer':json_dumps})
+        engine, conn, meta = get_postgres_db(dbref,
+                                             dbmeta,
+                                             **dbkwargs)
+    elif isinstance(dbref, str) and 'postgres' not in dbref:
+        raise NotImplementedError(
+            "viz-inspect currently doesn't support non-Postgres databases."
+        )
+    else:
+        engine, conn, meta = None, dbref, dbmeta
+        meta.bind = conn
+
+    object_comments = meta.tables['object_comments']
+    object_catalog = meta.tables['object_catalog']
+
+    with conn.begin():
+
+        added = updated = datetime.now(tz=utc)
+
+        sel = select([object_comments.c.user_flags]).select_from(
+            object_comments
+        ).where(
+            object_comments.c.objectid == objectid
+        ).where(
+            object_comments.c.userid == userid
+        )
+
+        res = conn.execute(sel)
+        this_user_flags = res.scalar()
+        res.close()
+
+
+        _flag = [k for k, v in this_user_flags.items() if v]
+        if len(_flag) != 1:
+            raise Exception('Should be one vote!')
+        this_user_flags[_flag[0]] = False
+        this_user_flags[new_vote] = True
+
+        LOGINFO('Changing the vote of user {} for hugs-{} from {} to {}'.\
+                format(userid, objectid, _flag[0], new_vote))
+
+        sel = select([object_catalog.c.user_flags]).where(
+            object_catalog.c.objectid == objectid
+        ).select_from(object_catalog)
+
+        res = conn.execute(sel)
+        flag_counts = res.scalar()
+
+        # update flag counts for new vote
+        LOGINFO('Old flags: {}'.format(flag_counts))
+        flag_counts[_flag[0]] -= 1
+        flag_counts[new_vote] += 1
+        LOGINFO('New flags: {}'.format(flag_counts))
+        
+        # if any of the good/bad flags make it over the limits, set the
+        # appropriate review_status
+        bad_flag_sum = sum(flag_counts[k] for k in bad_flags)
+        good_flag_sum = sum(flag_counts[k] for k in good_flags)
+        all_flag_sum = bad_flag_sum + good_flag_sum
+
+        if good_flag_sum >= max_good_votes:
+            new_review_status = 'complete-good'
+        elif bad_flag_sum >= max_bad_votes:
+            new_review_status = 'complete-bad'
+        elif (all_flag_sum < max_all_votes):
+            new_review_status = 'incomplete'
+        else:
+            new_review_status = 'incomplete'
+    
+        LOGINFO('Review status is: ' + new_review_status)
+
+        # update the flags and review status
+        upd = update(object_catalog).where(
+            object_catalog.c.objectid == objectid
+        ).values(
+            {'user_flags':flag_counts,
+             'review_status':new_review_status}
+        )
+
+        res = conn.execute(upd)
+        res.close()
+
+        upd = update(object_comments).where(
+            object_comments.c.objectid== objectid
+        ).where(
+            object_comments.c.userid == userid
+        ).values({'user_flags':this_user_flags})
+
+        res = conn.execute(upd)
+        res.close()
+
+    # close everything down if we were passed a database URL only and had to
+    # make a new engine
+    if engine:
+        conn.close()
+        meta.bind = None
+        engine.dispose()
