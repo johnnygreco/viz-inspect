@@ -314,7 +314,11 @@ var ui = {
         if (review.objectlist.indexOf(jump_to) == -1) {
 
           let list_page = parseInt(jump_to/review.current_rows_per_page);
-          let first_id =  review.current_rows_per_page * list_page + 1
+          if (jump_to % review.current_rows_per_page == 0){
+            list_page = list_page - 1
+          }
+          let first_id =  review.current_rows_per_page * list_page  + 1
+
           $('#objectlist-pref-select').val('all');
 
           review.get_object_list(
@@ -322,7 +326,7 @@ var ui = {
               'start',
               first_id,
               false,
-              0
+              list_page
           );
 
         }
@@ -347,7 +351,11 @@ var ui = {
           if (review.objectlist.indexOf(jump_to) == -1) {
 
             let list_page = parseInt(jump_to/review.current_rows_per_page);
-            let first_id =  review.current_rows_per_page * list_page + 1
+            if (jump_to % review.current_rows_per_page == 0){
+              list_page = list_page - 1
+            }
+            let first_id =  review.current_rows_per_page * list_page  + 1
+
             $('#objectlist-pref-select').val('all');
 
             review.get_object_list(
@@ -355,7 +363,7 @@ var ui = {
               'start',
               first_id,
               false,
-              0
+              list_page
             );
 
           }
