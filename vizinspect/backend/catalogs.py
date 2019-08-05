@@ -578,7 +578,8 @@ def get_objects(
             )
         else:
             actual_sel = actual_sel.where(
-                object_comments.c.userid != userid_to_check
+                (object_comments.c.userid == None) |\
+                (object_comments.c.userid != userid_to_check)
             )
 
     #

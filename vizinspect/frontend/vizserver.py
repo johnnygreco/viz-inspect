@@ -411,9 +411,9 @@ def main():
 
         # 0b. confirm the bad flags
         LOGGER.info("Which object flags are associated with 'bad' objects?")
-        bad_flag_keys = input("Bad object flags [default: cirrus, junk]: ")
+        bad_flag_keys = input("Bad object flags [default: cirrus, junk, outskirts, tidal]: ")
         if not bad_flag_keys or len(flag_keys.strip()) == 0:
-            set_bad_flag_keys = 'cirrus, junk'
+            set_bad_flag_keys = 'cirrus, junk, outskirts, tidal'
         else:
             set_bad_flag_keys = bad_flag_keys
         SITEINFO['bad_flag_keys'] = set_bad_flag_keys

@@ -136,14 +136,6 @@ def worker_get_objects(
             check_review_status = 'incomplete'
             userid_check = (userid, 'exclude')
 
-        elif review_status == 'other-complete-good' and userid is not None:
-            check_review_status = 'complete-good'
-            userid_check = (userid, 'exclude')
-
-        elif review_status == 'other-complete-bad' and userid is not None:
-            check_review_status = 'complete-bad'
-            userid_check = (userid, 'exclude')
-
         #
         # now, do the operations
         #

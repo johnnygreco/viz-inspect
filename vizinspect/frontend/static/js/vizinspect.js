@@ -462,30 +462,6 @@ var ui = {
           100
         );
       }
-      else if (selected === 'other-complete-good') {
-        ui.debounce(
-          review.get_object_list(
-            'other-complete-good',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
-      else if (selected === 'other-complete-bad') {
-        ui.debounce(
-          review.get_object_list(
-            'other-complete-bad',
-            'start',
-            1,
-            'first',
-            0
-          ),
-          100
-        );
-      }
       else {
         ui.debounce(
           review.get_object_list(
@@ -682,12 +658,6 @@ var review = {
         index_label = 'Current (in closed good objects with your vote)';
       }
       else if (review_status === 'self-complete-bad') {
-        index_label = 'Current (in closed bad objects with your vote)';
-      }
-      else if (review_status === 'other-complete-good') {
-        index_label = 'Current (in closed good objects without your vote)';
-      }
-      else if (review_status === 'other-complete-bad') {
         index_label = 'Current (in closed bad objects with your vote)';
       }
       else if (review_status === 'self-incomplete') {

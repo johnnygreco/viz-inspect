@@ -143,8 +143,6 @@ class ObjectListHandler(BaseHandler):
             - 'self-complete-good' -> this user's voted objects good-complete
             - 'self-complete-bad' -> this user's voted objects bad-complete
             - 'self-incomplete' -> this user's voted objects incomplete
-            - 'other-complete-good' -> other users' voted objects good-complete
-            - 'other-complete-bad' -> other users' voted objects bad-complete
             - 'other-incomplete' -> other users' voted objects incomplete
 
         page : int, optional, default = 0
@@ -186,9 +184,7 @@ class ObjectListHandler(BaseHandler):
                                      'self-incomplete',
                                      'self-complete-good',
                                      'self-complete-bad',
-                                     'other-incomplete',
-                                     'other-complete-good',
-                                     'other-complete-bad'):
+                                     'other-incomplete'):
                 raise ValueError("Unknown review status requested: '%s'" %
                                  review_status)
 
