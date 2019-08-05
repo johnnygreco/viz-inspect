@@ -313,10 +313,14 @@ var ui = {
         // see if we should also change the objectlist to all
         if (review.objectlist.indexOf(jump_to) == -1) {
 
+          let list_page = parseInt(jump_to/review.current_rows_per_page);
+          let first_id =  review.current_rows_per_page * list_page + 1
+          $('#objectlist-pref-select').val('all');
+
           review.get_object_list(
               'all',
               'start',
-              1,
+              first_id,
               false,
               0
           );
@@ -343,10 +347,13 @@ var ui = {
           if (review.objectlist.indexOf(jump_to) == -1) {
 
             let list_page = parseInt(jump_to/review.current_rows_per_page);
+            let first_id =  review.current_rows_per_page * list_page + 1
+            $('#objectlist-pref-select').val('all');
+
             review.get_object_list(
               'all',
               'start',
-              1,
+              first_id,
               false,
               0
             );
@@ -485,7 +492,7 @@ var ui = {
           review.get_object_list(
             review.current_list_reviewstatus,
             'start',
-            review.objectlist_end_keyid,
+            review.objectlist_end_keyid + 1,
             'first',
             review.current_page + 1
           ),
@@ -503,7 +510,7 @@ var ui = {
           review.get_object_list(
             review.current_list_reviewstatus,
             'end',
-            review.objectlist_start_keyid,
+            review.objectlist_start_keyid - 1,
             'last',
             review.current_page - 1
           ),
