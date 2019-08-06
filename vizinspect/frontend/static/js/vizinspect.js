@@ -1058,7 +1058,7 @@ ${item}
       review.get_object_list(
         review.current_list_reviewstatus,
         'start',
-        review.objectlist_end_keyid,
+        review.objectlist_end_keyid + 1,
         'first',
         review.current_page + 1
       );
@@ -1090,7 +1090,7 @@ ${item}
       review.get_object_list(
         review.current_list_reviewstatus,
         'end',
-        review.objectlist_start_keyid,
+        review.objectlist_start_keyid - 1,
         'last',
         review.current_page - 1
       );
