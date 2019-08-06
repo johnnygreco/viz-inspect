@@ -319,6 +319,7 @@ var ui = {
           }
           let first_id =  review.current_rows_per_page * list_page  + 1
 
+          $('#goto-page-number').val(list_page + 1)
           $('#objectlist-pref-select').val('all');
 
           review.get_object_list(
@@ -356,6 +357,7 @@ var ui = {
             }
             let first_id =  review.current_rows_per_page * list_page  + 1
 
+            $('#goto-page-number').val(list_page + 1)
             $('#objectlist-pref-select').val('all');
 
             review.get_object_list(
@@ -376,6 +378,56 @@ var ui = {
       }
 
     });
+
+
+    // handle enter key in the jump box
+    $('#jump-page-number').on('click', function (evt) {
+
+        let jump_to = parseInt($('#goto-page-number').val()) - 1;
+
+        if (!isNaN(jump_to) && (jump_to >= 0) && (jump_to < review.current_npages)) {
+
+            let first_id =  review.current_rows_per_page * jump_to + 1;
+            $('#current-source-index').val(first_id);
+
+            review.get_object_list(
+              review.current_list_reviewstatus,
+              'start',
+              first_id,
+              'first',
+              jump_to 
+            );
+
+          }
+    });
+
+
+    // handle enter key in the jump box
+    $('#goto-page-number').on('keyup', function (evt) {
+
+      if (evt.keyCode == 13) {
+
+        let jump_to = parseInt($('#goto-page-number').val()) - 1;
+
+        if (!isNaN(jump_to) && (jump_to >= 0) && (jump_to < review.current_npages)) {
+
+            let first_id =  review.current_rows_per_page * jump_to + 1;
+            $('#current-source-index').val(first_id);
+
+            review.get_object_list(
+              review.current_list_reviewstatus,
+              'start',
+              first_id,
+              'first',
+              jump_to 
+            );
+
+          }
+      }
+
+    });
+
+
 
     // handle clicking on a link in the objectid list
     $('#objectid-list').on('click','.objectid-link', function (evt) {
