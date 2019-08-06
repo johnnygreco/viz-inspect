@@ -608,7 +608,7 @@ var ui = {
       let this_objectid = review.current_objectid;
 
       // fire the save object handler
-      ui.debounce(review.save_object_comments_flags(this_objectid, true), 200);
+      ui.debounce(review.save_object_comments_flags(this_objectid), 200);
 
     });
 
@@ -751,6 +751,7 @@ var review = {
     }).done(function () {
 
       if (set_page_to !== undefined) {
+        $('#goto-page-number').val(set_page_to + 1)
         review.current_page = parseInt(set_page_to);
       }
 
@@ -1100,7 +1101,7 @@ ${item}
   },
 
 
-  save_object_comments_flags: function (objectid, jump_to_next) {
+  save_object_comments_flags: function (objectid) {
 
     let _xsrf;
     let posturl = `/api/save-object/${objectid}`;
@@ -1143,36 +1144,14 @@ ${item}
       let message = data.message;
 
       // update the object info
-      if (status == 'ok' && (jump_to_next === undefined)) {
-        review.get_object(objectid);
+      if (status == 'ok') {
+        review.get_next_object();
       }
-
       else if (status != 'ok') {
         ui.alert_box(message, "danger");
       }
 
-    }, 'json').done(function () {
-
-      // update the object list
-      let objectlist_reviewtype = $('#objectlist-pref-select').val();
-
-      review.get_object_list(
-        objectlist_reviewtype,
-        'start',
-        review.objectlist_start_keyid,
-      );
-
-    }).done(function () {
-
-      // jump to the next object if told to do so
-      if (jump_to_next !== undefined && jump_to_next === true) {
-
-        review.get_next_object();
-
-      }
-
-
-    }).fail(function (xhr) {
+    }, 'json').fail(function (xhr) {
       ui.alert_box("Could not update this object.", "danger");
     });
 
