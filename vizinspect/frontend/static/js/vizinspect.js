@@ -428,6 +428,18 @@ var ui = {
     });
 
 
+    $('#jump-random-number').on('click', function (evt) {
+
+    evt.preventDefault();
+
+    let pagemin = 1;
+    let pagemax = review.current_npages;
+    let random_page = Math.random() * (pagemax - pagemin) + pagemin;
+
+    $('#goto-page-number').val(parseInt(random_page));
+    $('#jump-page-number').click();
+
+    });
 
     // handle clicking on a link in the objectid list
     $('#objectid-list').on('click','.objectid-link', function (evt) {
