@@ -916,7 +916,8 @@ def update_vote(
         max_bad_votes=2,
         max_all_votes=3,
         username=None,
-        dbkwargs=None
+        dbkwargs=None, 
+        is_admin=False
 ):
 
     dbref, dbmeta = dbinfo
@@ -956,68 +957,149 @@ def update_vote(
         )
 
         res = conn.execute(sel)
+        checkcount = res.rowcount
         this_user_flags = res.scalar()
         res.close()
 
+        if (checkcount > 0) and not is_admin:
+            _flag = [k for k, v in this_user_flags.items() if v]
+            if len(_flag) != 1:
+                raise Exception('Should be one vote!')
+            this_user_flags[_flag[0]] = False
+            this_user_flags[new_vote] = True
 
-        _flag = [k for k, v in this_user_flags.items() if v]
-        if len(_flag) != 1:
-            raise Exception('Should be one vote!')
-        this_user_flags[_flag[0]] = False
-        this_user_flags[new_vote] = True
+            LOGINFO('Changing the vote of user {} for hugs-{} from {} to {}'.\
+                    format(userid, objectid, _flag[0], new_vote))
 
-        LOGINFO('Changing the vote of user {} for hugs-{} from {} to {}'.\
-                format(userid, objectid, _flag[0], new_vote))
+            sel = select([object_catalog.c.user_flags]).where(
+                object_catalog.c.objectid == objectid
+            ).select_from(object_catalog)
 
-        sel = select([object_catalog.c.user_flags]).where(
-            object_catalog.c.objectid == objectid
-        ).select_from(object_catalog)
+            res = conn.execute(sel)
+            flag_counts = res.scalar()
 
-        res = conn.execute(sel)
-        flag_counts = res.scalar()
+            # update flag counts for new vote
+            LOGINFO('Old flags: {}'.format(flag_counts))
+            flag_counts[_flag[0]] -= 1
+            flag_counts[new_vote] += 1
+            LOGINFO('New flags: {}'.format(flag_counts))
+            
+            # if any of the good/bad flags make it over the limits, set the
+            # appropriate review_status
+            bad_flag_sum = sum(flag_counts[k] for k in bad_flags)
+            good_flag_sum = sum(flag_counts[k] for k in good_flags)
+            all_flag_sum = bad_flag_sum + good_flag_sum
 
-        # update flag counts for new vote
-        LOGINFO('Old flags: {}'.format(flag_counts))
-        flag_counts[_flag[0]] -= 1
-        flag_counts[new_vote] += 1
-        LOGINFO('New flags: {}'.format(flag_counts))
+            if good_flag_sum >= max_good_votes:
+                new_review_status = 'complete-good'
+            elif bad_flag_sum >= max_bad_votes:
+                new_review_status = 'complete-bad'
+            elif (all_flag_sum < max_all_votes):
+                new_review_status = 'incomplete'
+            else:
+                new_review_status = 'incomplete'
         
-        # if any of the good/bad flags make it over the limits, set the
-        # appropriate review_status
-        bad_flag_sum = sum(flag_counts[k] for k in bad_flags)
-        good_flag_sum = sum(flag_counts[k] for k in good_flags)
-        all_flag_sum = bad_flag_sum + good_flag_sum
+            LOGINFO('Review status is: ' + new_review_status)
 
-        if good_flag_sum >= max_good_votes:
-            new_review_status = 'complete-good'
-        elif bad_flag_sum >= max_bad_votes:
-            new_review_status = 'complete-bad'
-        elif (all_flag_sum < max_all_votes):
-            new_review_status = 'incomplete'
+            # update the flags and review status
+            upd = update(object_catalog).where(
+                object_catalog.c.objectid == objectid
+            ).values(
+                {'user_flags':flag_counts,
+                 'review_status':new_review_status}
+            )
+
+            res = conn.execute(upd)
+            res.close()
+
+            upd = update(object_comments).where(
+                object_comments.c.objectid== objectid
+            ).where(
+                object_comments.c.userid == userid
+            ).values({'user_flags':this_user_flags})
+
         else:
-            new_review_status = 'incomplete'
-    
-        LOGINFO('Review status is: ' + new_review_status)
 
-        # update the flags and review status
-        upd = update(object_catalog).where(
-            object_catalog.c.objectid == objectid
-        ).values(
-            {'user_flags':flag_counts,
-             'review_status':new_review_status}
-        )
+            if not is_admin:
+                LOGINFO('Inserting vote for user {} for hugs-{}'.\
+                        format(userid, objectid))
 
-        res = conn.execute(upd)
-        res.close()
+            all_flags = good_flags + bad_flags
 
-        upd = update(object_comments).where(
-            object_comments.c.objectid== objectid
-        ).where(
-            object_comments.c.userid == userid
-        ).values({'user_flags':this_user_flags})
+            # 1. bleach the comment
+            cleaned_comment = bleach.clean('ADMIN override', strip=True)
 
-        res = conn.execute(upd)
-        res.close()
+            # 2. markdown render the comment
+            rendered_comment = markdown.markdown(
+                cleaned_comment,
+                output_format='html5',
+            )
+
+            user_flags = {f:False for f in all_flags}
+            user_flags[new_vote] = True
+
+            # prepare the insert
+            insert = pg.insert(
+                object_comments
+            ).values(
+                {'objectid':objectid,
+                 'added':added,
+                 'updated':updated,
+                 'userid':userid,
+                 'username':username,
+                 'user_flags':user_flags,
+                 'contents':rendered_comment}
+            )
+            res = conn.execute(insert)
+            updated = res.rowcount
+            res.close()
+
+            #
+            # now update the counts for the object_flags
+            #
+            sel = select([object_catalog.c.user_flags]).where(
+                object_catalog.c.objectid == objectid
+            ).select_from(object_catalog)
+
+            res = conn.execute(sel)
+            flag_counts = res.scalar()
+
+            if is_admin:
+                LOGINFO('Admin overriding final vote for {} to {}'.\
+                    format(objectid, new_vote))
+                for k in user_flags:
+                    flag_counts[k] = 0
+                flag_counts[new_vote] = 2
+            else:
+                for k in user_flags:
+                    if user_flags[k] is True:
+                        flag_counts[k] = flag_counts[k] + 1
+
+            # if any of the good/bad flags make it over the limits, set the
+            # appropriate review_status
+            bad_flag_sum = sum(flag_counts[k] for k in bad_flags)
+            good_flag_sum = sum(flag_counts[k] for k in good_flags)
+            all_flag_sum = bad_flag_sum + good_flag_sum
+
+            if good_flag_sum >= max_good_votes:
+                new_review_status = 'complete-good'
+            elif bad_flag_sum >= max_bad_votes:
+                new_review_status = 'complete-bad'
+            elif (all_flag_sum < max_all_votes):
+                new_review_status = 'incomplete'
+            else:
+                new_review_status = 'incomplete'
+
+            # update the flags and review status
+            upd = update(object_catalog).where(
+                object_catalog.c.objectid == objectid
+            ).values(
+                {'user_flags':flag_counts,
+                 'review_status':new_review_status}
+            )
+
+            res = conn.execute(upd)
+            res.close()
 
     # close everything down if we were passed a database URL only and had to
     # make a new engine
