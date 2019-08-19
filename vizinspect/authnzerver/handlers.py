@@ -308,7 +308,7 @@ class AuthHandler(tornado.web.RequestHandler):
             # get the request ID
             # this is an integer
             reqid = payload['reqid']
-            if reqid is None or reqid == 0:
+            if reqid is None:
                 raise ValueError("no request ID provided")
 
             # run the function associated with the request type
