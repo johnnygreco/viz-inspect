@@ -1019,6 +1019,9 @@ def update_vote(
                 object_comments.c.userid == userid
             ).values({'user_flags':this_user_flags})
 
+            res = conn.execute(upd)
+            res.close()
+
         else:
 
             if not is_admin:
