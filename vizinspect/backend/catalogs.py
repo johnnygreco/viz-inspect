@@ -917,7 +917,8 @@ def update_vote(
         max_all_votes=3,
         username=None,
         dbkwargs=None, 
-        is_admin=False
+        is_admin=False, 
+        extra_comments=None,
 ):
 
     dbref, dbmeta = dbinfo
@@ -1027,7 +1028,11 @@ def update_vote(
             all_flags = good_flags + bad_flags
 
             # 1. bleach the comment
-            cleaned_comment = bleach.clean('ADMIN override', strip=True)
+            _comment = 'ADMIN override'
+            if extra_comments is not None:
+                _comment = '{}, {}'.format(
+                    extra_comments.replace('"', ''), _comment)
+            cleaned_comment = bleach.clean(_comment, strip=True)
 
             # 2. markdown render the comment
             rendered_comment = markdown.markdown(
