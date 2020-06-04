@@ -1,0 +1,7 @@
+{
+    "email_sender":"you@gmail.com",
+    "email_server": "smtp.gmail.com",
+    "email_port": 587,
+    "email_user": "gmail_username",
+    "email_pass": "Use your gmail pass. If you have 2FA, create an app password in gmail settings and put that in here. 99 emails per day can be sent."
+}

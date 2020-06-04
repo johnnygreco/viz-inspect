@@ -1,0 +1,8 @@
+{
+    "email_settings_file": "email-server.json",
+    "signups_allowed": true,
+    "logins_allowed": true,
+    "rate_limit_active": true,
+    "data_path":"./viz-inspect-data",
+    "cache_location": "/tmp/vizinspect-cache"
+}
