@@ -213,7 +213,8 @@ def setup_worker(siteinfo):
     currproc.engine, currproc.connection, currproc.metadata = (
         database.get_vizinspect_db(
             siteinfo['database_url'],
-            database.VIZINSPECT
+            database.VIZINSPECT,
+            echo=True
         )
     )
 
