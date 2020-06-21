@@ -578,8 +578,8 @@ def get_objects(
             )
         else:
             actual_sel = actual_sel.where(
-                (object_comments.c.userid == None) |\
-                (object_comments.c.userid != userid_to_check)
+                ((object_comments.c.userid == None) |
+                 (object_comments.c.userid != userid_to_check))
             )
 
     #
@@ -916,8 +916,8 @@ def update_vote(
         max_bad_votes=2,
         max_all_votes=3,
         username=None,
-        dbkwargs=None, 
-        is_admin=False, 
+        dbkwargs=None,
+        is_admin=False,
         extra_comments=None,
 ):
 
@@ -984,7 +984,7 @@ def update_vote(
             flag_counts[_flag[0]] -= 1
             flag_counts[new_vote] += 1
             LOGINFO('New flags: {}'.format(flag_counts))
-            
+
             # if any of the good/bad flags make it over the limits, set the
             # appropriate review_status
             bad_flag_sum = sum(flag_counts[k] for k in bad_flags)
@@ -999,7 +999,7 @@ def update_vote(
                 new_review_status = 'incomplete'
             else:
                 new_review_status = 'incomplete'
-        
+
             LOGINFO('Review status is: ' + new_review_status)
 
             # update the flags and review status
