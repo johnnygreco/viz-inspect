@@ -592,8 +592,8 @@ def get_objects(
             # the actual select then excludes these objects but includes
             # all objects that have no reviews
             actual_sel = actual_sel.where(
-                or_(object_comments.c.objectid.notin_(subquery_sel),
-                    object_comments.c.userid.is_(None))
+                (or_(object_comments.c.objectid.notin_(subquery_sel),
+                     object_comments.c.userid.is_(None)))
             )
 
     #
