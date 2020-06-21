@@ -63,7 +63,7 @@ except Exception:
 
     utc = UTC()
 
-from sqlalchemy import select, update, func, distinct
+from sqlalchemy import select, update, func, distinct, or_
 from sqlalchemy.dialects import postgresql as pg
 
 import markdown
@@ -577,9 +577,23 @@ def get_objects(
                 object_comments.c.userid == userid_to_check
             )
         else:
+            # actual_sel = actual_sel.where(
+            #     ( or_(object_comments.c.userid.is_(None),
+            #           (object_comments.c.userid != userid_to_check)) )
+            # )
+
+            # this selects all the objectids that this user has voted on
+            subquery_sel = select(
+                [object_catalog_sample.c.objectid]
+            ).select_from(join).where(
+                object_comments.c.userid == userid_to_check
+            ).alias()
+
+            # the actual select then excludes these objects but includes
+            # all objects that have no reviews
             actual_sel = actual_sel.where(
-                ((object_comments.c.userid == None) |
-                 (object_comments.c.userid != userid_to_check))
+                or_(object_comments.c.objectid.notin_(subquery_sel),
+                    object_comments.c.userid.is_(None))
             )
 
     #
