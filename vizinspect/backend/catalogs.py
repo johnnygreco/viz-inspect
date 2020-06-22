@@ -63,7 +63,7 @@ except Exception:
 
     utc = UTC()
 
-from sqlalchemy import select, update, func, distinct
+from sqlalchemy import select, update, func, distinct, or_
 from sqlalchemy.dialects import postgresql as pg
 
 import markdown
@@ -577,9 +577,23 @@ def get_objects(
                 (object_comments.c.userid == userid_to_check)
             )
         else:
+            # actual_sel = actual_sel.where(
+            #     ( or_(object_comments.c.userid.is_(None),
+            #           (object_comments.c.userid != userid_to_check)) )
+            # )
+
+            # this selects all the objectids that this user has voted on
+            subquery_sel = select(
+                [object_catalog_sample.c.objectid]
+            ).select_from(join).where(
+                object_comments.c.userid == userid_to_check
+            ).alias()
+
+            # the actual select then excludes these objects but includes
+            # all objects that have no reviews
             actual_sel = actual_sel.where(
-                ((object_comments.c.userid == None) |
-                 (object_comments.c.userid != userid_to_check))
+                (or_(object_catalog_sample.c.objectid.notin_(subquery_sel),
+                     object_comments.c.userid.is_(None)))
             )
 
     #
@@ -916,8 +930,8 @@ def update_vote(
         max_bad_votes=2,
         max_all_votes=3,
         username=None,
-        dbkwargs=None, 
-        is_admin=False, 
+        dbkwargs=None,
+        is_admin=False,
         extra_comments=None,
 ):
 
@@ -984,7 +998,7 @@ def update_vote(
             flag_counts[_flag[0]] -= 1
             flag_counts[new_vote] += 1
             LOGINFO('New flags: {}'.format(flag_counts))
-            
+
             # if any of the good/bad flags make it over the limits, set the
             # appropriate review_status
             bad_flag_sum = sum(flag_counts[k] for k in bad_flags)
@@ -999,7 +1013,7 @@ def update_vote(
                 new_review_status = 'incomplete'
             else:
                 new_review_status = 'incomplete'
-        
+
             LOGINFO('Review status is: ' + new_review_status)
 
             # update the flags and review status

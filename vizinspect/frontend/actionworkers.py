@@ -117,14 +117,17 @@ def worker_get_objects(
         #
 
         elif review_status == 'self-incomplete' and userid is not None:
+            LOGGER.info("self-incomplete requested for userid: %s" % userid)
             check_review_status = 'incomplete'
             userid_check = (userid, 'include')
 
         elif review_status == 'self-complete-good' and userid is not None:
+            LOGGER.info("self-complete-good requested for userid: %s" % userid)
             check_review_status = 'complete-good'
             userid_check = (userid, 'include')
 
         elif review_status == 'self-complete-bad' and userid is not None:
+            LOGGER.info("self-complete-bad requested for userid: %s" % userid)
             check_review_status = 'complete-bad'
             userid_check = (userid, 'include')
 
@@ -133,6 +136,7 @@ def worker_get_objects(
         #
 
         elif review_status == 'other-incomplete' and userid is not None:
+            LOGGER.info("other-incomplete requested for userid: %s" % userid)
             check_review_status = 'incomplete'
             userid_check = (userid, 'exclude')
 
